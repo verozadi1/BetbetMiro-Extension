@@ -71,11 +71,10 @@ class YunshanIDProvider : MainAPI() {
                         ?.attr("href")
                         ?: ""
 
-                Episode(
-                    data = episodeUrl,
-                    name = element.text(),
+                newEpisode(episodeUrl) {
+                    name = element.text()
                     episode = index + 1
-                )
+                }
             }
             .reversed()
 
