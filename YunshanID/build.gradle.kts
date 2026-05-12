@@ -5,7 +5,7 @@ plugins {
 }
 
 cloudstream {
-    mainClass = "com.betbet.yunshanid.YunshanIDPlugin"
+    mainClassName = "com.betbet.yunshanid.YunshanIDPlugin"
     language = "id"
     description = "Donghua & Anime provider dari YunshanID"
     authors = listOf("Betbet")
