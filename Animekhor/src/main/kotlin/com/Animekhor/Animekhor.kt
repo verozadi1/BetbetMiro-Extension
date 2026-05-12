@@ -9,7 +9,7 @@ open class Animekhor : MainAPI() {
     override var mainUrl              = "https://animekhor.org"
     override var name                 = "Animekhor"
     override val hasMainPage          = true
-    override var lang                 = "zh"
+    override var lang                 = "id"
     override val hasDownloadSupport   = true
     override val supportedTypes       = setOf(TvType.Movie,TvType.Anime)
 
