@@ -6,10 +6,12 @@ plugins {
     id("com.lagradost.cloudstream3.gradle")
 }
 
+// Konfigurasi Cloudstream
 cloudstream {
-    // Pastikan ini merujuk ke lokasi class Plugin kamu
-    mainClass = "com.betbet.yunshanid.YunshanIDPlugin" 
+    // Gunakan setMainClass jika mainClass = tidak terbaca
+    setMainClass("com.betbet.yunshanid.YunshanIDPlugin")
     
+    // Gunakan properti yang didukung oleh plugin gradle cloudstream
     name = "YunshanID"
     description = "Donghua & Anime provider dari YunshanID"
     authors = listOf("Betbet")
@@ -21,6 +23,13 @@ cloudstream {
         "Anime",
         "TvSeries"
     )
+}
 
-    iconUrl = "https://yunshanid.site/favicon.ico"
+android {
+    namespace = "com.betbet.yunshanid"
+    compileSdk = 33
+
+    defaultConfig {
+        minSdk = 21
+    }
 }
