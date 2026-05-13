@@ -8,6 +8,7 @@ buildscript {
         maven("https://jitpack.io")
     }
     dependencies {
+        // Memastikan menggunakan versi plugin terbaru
         classpath("com.github.recloudstream:gradle:-SNAPSHOT")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.21")
     }
@@ -17,14 +18,14 @@ apply(plugin = "com.android.library")
 apply(plugin = "kotlin-android")
 apply(plugin = "com.github.recloudstream")
 
+// Gunakan blok cloudstream {} atau configure<CloudstreamExtension> dengan properti langsung
 configure<CloudstreamExtension> {
-    setPluginId("Yunshanid")
-    setPluginName("Yunshanid")
-    setPluginClass("com.Yunshanid.YunshanidPlugin")
-    // Deskripsi diperbarui
-    setPluginDescription("Dibuat oleh BetbetMiro untuk menonton konten dari Yunshanid")
-    // Author tanpa spasi
-    author = "BetbetMiro"
+    id = "Yunshanid"
+    name = "Yunshanid"
+    pluginClass = "com.Yunshanid.YunshanidPlugin"
+    description = "Dibuat oleh BetbetMiro untuk menonton konten dari Yunshanid"
+    // Gunakan authors (plural) karena biasanya sistem mengharapkan List
+    authors = listOf("BetbetMiro")
 }
 
 dependencies {
