@@ -131,4 +131,124 @@ class YunshanidProvider : MainAPI() {
 
         val description =
             document.selectFirst(
-                ".entry-content p, .desc, .
+                ".entry-content p, .desc, .synp"
+            )?.text()
+
+        // Genres
+        val tags = document.select(
+            ".genxed a, .mgen a, .info-content a"
+        ).map {
+            it.text()
+        }
+
+        // Episodes
+        var episodes = document.select(
+            ".eplister li, #chapterlist li, .episodelist li"
+        ).mapIndexed { index, ep ->
+
+            val epName =
+                ep.selectFirst("a")
+                    ?.text()
+                    ?.trim()
+
+            val epUrl =
+                ep.selectFirst("a")
+                    ?.attr("href")
+                    ?: ""
+
+            Episode(
+                epUrl,
+                epName
+            ).apply {
+                episode = index + 1
+            }
+        }
+
+        // fallback movie / batch
+        if (episodes.isEmpty()) {
+
+            episodes = listOf(
+                Episode(
+                    url,
+                    "Full Movie"
+                )
+            )
+        }
+
+        return newAnimeLoadResponse(
+            title,
+            url,
+            TvType.Anime
+        ) {
+
+            posterUrl = poster
+            plot = description
+            tags = tags
+
+            addEpisodes(
+                DubStatus.Subbed,
+                episodes.reversed()
+            )
+        }
+    }
+
+    // =========================
+    // LOAD LINKS
+    // =========================
+
+    override suspend fun loadLinks(
+        data: String,
+        isCasting: Boolean,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+
+        val document = app.get(
+            data,
+            referer = mainUrl
+        ).document
+
+        val servers = mutableListOf<String>()
+
+        // iframe biasa
+        document.select("iframe").forEach {
+            val src = it.attr("src")
+            if (src.isNotBlank())
+                servers.add(src)
+        }
+
+        // tombol server
+        document.select(
+            "a[href], .mobius option"
+        ).forEach {
+
+            val href = it.attr("href")
+
+            if (
+                href.contains("dood", true) ||
+                href.contains("mp4upload", true) ||
+                href.contains("stream", true)
+            ) {
+                servers.add(href)
+            }
+        }
+
+        // ambil unique
+        servers.distinct().forEach { server ->
+
+            try {
+
+                loadExtractor(
+                    server,
+                    data,
+                    subtitleCallback,
+                    callback
+                )
+
+            } catch (_: Exception) {
+            }
+        }
+
+        return true
+    }
+}
