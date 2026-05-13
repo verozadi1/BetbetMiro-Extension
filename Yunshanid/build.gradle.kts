@@ -4,8 +4,8 @@ apply(plugin = "com.android.library")
 apply(plugin = "kotlin-android")
 apply(plugin = "com.github.recloudstream")
 
-configure<CloudstreamExtension> {
-    // Gunakan nama properti spesifik ini agar tidak bentrok dengan Gradle Project
+cloudstream {
+    // Properti ini adalah yang paling aman dan tidak akan bentrok dengan Gradle
     pluginId = "Yunshanid"
     pluginName = "Yunshanid"
     pluginClass = "com.Yunshanid.YunshanidPlugin"
