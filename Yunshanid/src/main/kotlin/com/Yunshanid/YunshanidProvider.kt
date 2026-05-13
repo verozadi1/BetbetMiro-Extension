@@ -16,7 +16,7 @@ class YunshanidProvider : MainAPI() {
         val document = app.get(mainUrl).document
         val homePageLists = mutableListOf<HomePageList>()
 
-        // Mengambil baris konten berdasarkan block di web
+        // Mengambil baris konten (Update Terbaru, Movie, dll)
         document.select(".block").forEach { section ->
             val title = section.selectFirst(".title-resizer h2, .title-block h3")?.text() ?: "Terbaru"
             val items = section.select("article, .bs").mapNotNull { it.toSearchResult() }
@@ -76,16 +76,12 @@ class YunshanidProvider : MainAPI() {
     ): Boolean {
         val document = app.get(data).document
         
-        // Cek iframe utama
+        // Iframe Player
         document.select("iframe").forEach {
             val src = it.attr("src")
-            if (src.isNotEmpty()) loadExtractor(src, data, subtitleCallback, callback)
-        }
-
-        // Cek link di tombol player/server
-        document.select(".mirror-option option, .nav-tabs li a").forEach {
-            val embedUrl = it.attr("value").ifEmpty { it.attr("data-embed") }
-            if (embedUrl.startsWith("http")) loadExtractor(embedUrl, data, subtitleCallback, callback)
+            if (src.isNotEmpty() && src.startsWith("http")) {
+                loadExtractor(src, data, subtitleCallback, callback)
+            }
         }
 
         return true
