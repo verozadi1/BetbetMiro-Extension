@@ -3,37 +3,38 @@ package com.oppadrama
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
-import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
-import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import org.jsoup.nodes.Element
-import org.jsoup.Jsoup
-import java.net.URI
 
 class OppadramaProvider : MainAPI() {
 
     override var mainUrl = "http://45.11.57.199"
     override var name = "OppaDrama"
-    override val hasMainPage = true
     override var lang = "id"
 
+    override val hasMainPage = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
-    // ---------------- MAIN PAGE ----------------
     override val mainPage = mainPageOf(
-        "series/?status=&type=&order=update" to "Latest Update",
-        "series/?country[]=south-korea&type=Drama&order=update" to "Korean Drama",
-        "series/?country[]=japan&type=Drama&order=update" to "Japanese Drama",
-        "series/?country[]=china&type=Drama&order=update" to "Chinese Drama"
+        "" to "Home",
+        "series/" to "Series",
+        "movie/" to "Movie"
     )
 
+    // ---------------- MAIN PAGE ----------------
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
 
-        val url = "$mainUrl/${request.data}&page=$page"
+        val url = if (request.data.isBlank()) {
+            "$mainUrl/"
+        } else {
+            "$mainUrl/${request.data}?page=$page"
+        }
+
         val doc = app.get(url).document
 
-        val items = doc.select("div.listupd article.bs, article, .bs").mapNotNull {
-            it.toSearchResult()
-        }
+        // 🔥 SUPER FLEXIBLE SELECTOR (INI KUNCI FIX)
+        val items = doc.select("article, .item, .grid-item, .movie, .series, a[href*='series'], a[href*='movie']")
+            .mapNotNull { it.toSearchResult() }
+            .distinctBy { it.url }
 
         return newHomePageResponse(request.name, items, hasNext = items.isNotEmpty())
     }
@@ -43,23 +44,24 @@ class OppadramaProvider : MainAPI() {
 
         val doc = app.get("$mainUrl/?s=$query").document
 
-        return doc.select("div.listupd article.bs, article, .bs")
+        return doc.select("article, .item, a[href]")
             .mapNotNull { it.toSearchResult() }
+            .distinctBy { it.url }
     }
 
-    // ---------------- SEARCH PARSER ----------------
+    // ---------------- PARSER ----------------
     private fun Element.toSearchResult(): SearchResponse? {
 
-        val a = this.selectFirst("a") ?: return null
-        val href = fixUrl(a.attr("href"))
+        val a = if (this.tagName() == "a") this else this.selectFirst("a") ?: return null
 
+        val href = fixUrl(a.attr("href"))
         val title = a.attr("title").ifBlank {
-            this.selectFirst(".tt, h2, h3")?.text()
+            this.selectFirst("h1,h2,h3,.title,.tt")?.text()
         } ?: return null
 
         val poster = this.selectFirst("img")?.attr("src")
 
-        val isSeries = href.contains("/series") || href.contains("episode")
+        val isSeries = href.contains("series", true)
 
         return if (isSeries) {
             newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
@@ -77,13 +79,16 @@ class OppadramaProvider : MainAPI() {
 
         val doc = app.get(url).document
 
-        val title = doc.selectFirst("h1, h1.entry-title")?.text().orEmpty()
+        val title = doc.selectFirst("h1,h2,.entry-title")?.text().orEmpty()
         val poster = doc.selectFirst("img")?.attr("src")
-        val plot = doc.select("div.entry-content p").text()
+        val plot = doc.select("p").text()
 
-        val episodes = doc.select("div.eplister ul li a, .eplister a")
-            .mapIndexedNotNull { index, a ->
-                val link = fixUrl(a.attr("href"))
+        val episodes = doc.select("a[href*='episode'], .eplister a, li a")
+            .mapIndexedNotNull { index, it ->
+                val link = fixUrl(it.attr("href"))
+
+                if (link.isBlank()) return@mapIndexedNotNull null
+
                 newEpisode(link) {
                     this.name = "Episode ${index + 1}"
                     this.episode = index + 1
@@ -103,7 +108,7 @@ class OppadramaProvider : MainAPI() {
         }
     }
 
-    // ---------------- LOAD LINKS (FIX UTAMA) ----------------
+    // ---------------- LOAD LINKS ----------------
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -113,54 +118,23 @@ class OppadramaProvider : MainAPI() {
 
         val doc = app.get(data).document
 
-        // 1. iframe langsung (primary player)
-        doc.select("iframe").forEach { iframe ->
-            val src = iframe.attr("src")
-            if (src.isNotBlank()) {
-                loadExtractor(src, data, subtitleCallback, callback)
-            }
-        }
-
-        // 2. embed container fallback
-        doc.select("div.player-embed iframe, .metaframe, .responsive-embed iframe")
-            .forEach {
-                val src = it.attr("src")
-                if (src.isNotBlank()) {
-                    loadExtractor(src, data, subtitleCallback, callback)
+        // 🔥 AMBIL SEMUA POSSIBLE PLAYER
+        val links = doc.select("iframe, video source, script, a[href*='player'], a[href*='embed']")
+            .mapNotNull {
+                when {
+                    it.tagName() == "iframe" -> it.attr("src")
+                    it.tagName() == "source" -> it.attr("src")
+                    else -> it.attr("href")
                 }
             }
+            .filter { it.isNotBlank() }
 
-        // 3. mirror base64 fallback (kalau ada)
-        doc.select("select.mirror option[value]").forEach { opt ->
-            try {
-                val decoded = base64Decode(opt.attr("value"))
-                val iframe = Jsoup.parse(decoded).selectFirst("iframe")
-                val src = iframe?.attr("src")
+        if (links.isEmpty()) return false
 
-                if (!src.isNullOrBlank()) {
-                    loadExtractor(src, data, subtitleCallback, callback)
-                }
-            } catch (_: Exception) {}
-        }
-
-        // 4. download links fallback
-        doc.select("div.dlbox a[href]").forEach {
-            val url = it.attr("href")
-            if (url.isNotBlank()) {
-                loadExtractor(url, data, subtitleCallback, callback)
-            }
+        links.forEach { url ->
+            loadExtractor(url, data, subtitleCallback, callback)
         }
 
         return true
-    }
-
-    // ---------------- HELPERS ----------------
-    private fun String.toUriHost(): String {
-        return try {
-            val u = URI(this)
-            "${u.scheme}://${u.host}"
-        } catch (e: Exception) {
-            mainUrl
-        }
     }
 }
