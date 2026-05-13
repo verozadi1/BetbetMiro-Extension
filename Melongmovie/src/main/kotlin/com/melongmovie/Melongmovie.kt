@@ -1,9 +1,9 @@
 package com.melongmovie
 
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
+import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
 
 class Melongmovie : MainAPI() {
@@ -16,7 +16,7 @@ class Melongmovie : MainAPI() {
     override val supportedTypes = setOf(TvType.Movie)
 
     override val mainPage = mainPageOf(
-        "latest-movies/page/%d/" to "Latest",
+        "latest-movies/page/%d/" to "Latest Movies",
         "advanced-search/page/%d/?order=latest&type[]=post" to "All Movies"
     )
 
@@ -24,12 +24,10 @@ class Melongmovie : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
 
         val url = "$mainUrl/${request.data}".format(page)
-
         val doc = app.get(url).document
 
-        val items = doc.select("article, .box, .post, .item").mapNotNull {
-            it.toSearch()
-        }
+        val items = doc.select("article, .box, .post, .item, div.los article.box")
+            .mapNotNull { it.toSearchResult() }
 
         return newHomePageResponse(request.name, items, hasNext = items.isNotEmpty())
     }
@@ -39,22 +37,23 @@ class Melongmovie : MainAPI() {
 
         val doc = app.get("$mainUrl/?s=$query").document
 
-        return doc.select("article, .box, .post, .item").mapNotNull {
-            it.toSearch()
-        }
+        return doc.select("article, .box, .post, .item, div.los article.box")
+            .mapNotNull { it.toSearchResult() }
     }
 
-    // ---------------- SEARCH PARSER ----------------
-    private fun Element.toSearch(): SearchResponse? {
+    // ---------------- PARSER ----------------
+    private fun Element.toSearchResult(): SearchResponse? {
 
         val a = this.selectFirst("a") ?: return null
         val href = fixUrl(a.attr("href"))
-        val title = a.attr("title").ifBlank { a.text() }
+        val title = a.attr("title").ifBlank {
+            this.selectFirst("h1,h2,h3,.entry-title,.tt")?.text()
+        } ?: return null
 
-        if (title.isBlank()) return null
+        val poster = this.selectFirst("img")?.attr("src")
 
         return newMovieSearchResponse(title, href, TvType.Movie) {
-            this.posterUrl = this@toSearch.selectFirst("img")?.attr("src")
+            this.posterUrl = poster
         }
     }
 
@@ -63,7 +62,7 @@ class Melongmovie : MainAPI() {
 
         val doc = app.get(url).document
 
-        val title = doc.selectFirst("h1")?.text().orEmpty()
+        val title = doc.selectFirst("h1, h2, .entry-title")?.text().orEmpty()
         val poster = doc.selectFirst("img")?.attr("src")
         val plot = doc.select("p").text()
 
@@ -73,7 +72,7 @@ class Melongmovie : MainAPI() {
         }
     }
 
-    // ---------------- LOAD LINKS (FIX UTAMA) ----------------
+    // ---------------- LOAD LINKS (FIX INTI) ----------------
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -82,10 +81,9 @@ class Melongmovie : MainAPI() {
     ): Boolean {
 
         val doc = app.get(data).document
-
         var found = false
 
-        // 🔥 1. iframe normal
+        // 1. iframe utama
         doc.select("iframe").forEach {
             val src = it.attr("src")
             if (src.isNotBlank()) {
@@ -94,25 +92,31 @@ class Melongmovie : MainAPI() {
             }
         }
 
-        // 🔥 2. lazy iframe
-        doc.select("[data-src], [data-lazy-src]").forEach {
-            val src = it.attr("data-src").ifBlank { it.attr("data-lazy-src") }
+        // 2. embed holder fallback
+        doc.select("div#embed_holder iframe, div.embed iframe").forEach {
+            val src = it.attr("src")
             if (src.isNotBlank()) {
                 loadExtractor(src, data, subtitleCallback, callback)
                 found = true
             }
         }
 
-        // 🔥 3. script embed fallback
-        doc.select("script").forEach {
-            val text = it.html()
-            if (text.contains("iframe")) {
-                Regex("src\\s*=\\s*\"(.*?)\"")
-                    .findAll(text)
-                    .forEach { m ->
-                        loadExtractor(m.groupValues[1], data, subtitleCallback, callback)
-                        found = true
+        // 3. mirror fallback (kalau ada)
+        doc.select("ul.mirror a, a[data-href]").forEach {
+            val url = it.attr("href").ifBlank { it.attr("data-href") }
+
+            if (url.isNotBlank()) {
+                try {
+                    val mirrorDoc = app.get(url).document
+
+                    mirrorDoc.select("iframe").forEach { iframe ->
+                        val src = iframe.attr("src")
+                        if (src.isNotBlank()) {
+                            loadExtractor(src, url, subtitleCallback, callback)
+                            found = true
+                        }
                     }
+                } catch (_: Exception) {}
             }
         }
 
