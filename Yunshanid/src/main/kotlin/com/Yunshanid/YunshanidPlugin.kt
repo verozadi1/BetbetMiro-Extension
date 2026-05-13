@@ -10,7 +10,7 @@ class YunshanidPlugin : Plugin() {
     override fun load(context: Context) {
         registerMainAPI(YunshanidProvider())
         
-        // Mendaftarkan Extractor agar link video bisa langsung diputar
+        // Daftar Extractor "Wajib" buat situs lokal (Copy-paste dari spek Winbu)
         registerExtractorAPI(PixelDrain())
         registerExtractorAPI(Gofile())
         registerExtractorAPI(Krakenfiles())
@@ -18,5 +18,6 @@ class YunshanidPlugin : Plugin() {
         registerExtractorAPI(Mp4Upload())
         registerExtractorAPI(FileMoon())
         registerExtractorAPI(StreamWish())
+        registerExtractorAPI(VidHidePro())
     }
 }
