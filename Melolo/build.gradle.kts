@@ -1,9 +1,10 @@
 // use an integer for version numbers
 version = 1
 
+
 cloudstream {
     description = "😶 Melolo - Platform streaming Drama Asia (Short-form) dengan subtitle Indonesia!"
-    language = "id"
+    language    = "id"
     authors = listOf("BetbetMiro")
 
     status = 1

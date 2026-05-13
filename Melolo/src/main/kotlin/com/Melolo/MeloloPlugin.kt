@@ -8,7 +8,6 @@ class MeloloPlugin: BasePlugin() {
     override fun load() {
         registerMainAPI(Melolo())
         
-        // Register specific extractors
         MeloloEkstraktors.list.forEach { extractor ->
             registerExtractorAPI(extractor)
         }

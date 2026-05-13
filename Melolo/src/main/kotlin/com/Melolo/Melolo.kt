@@ -1,229 +1,159 @@
 package com.Melolo
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
-import org.jsoup.nodes.Document
-import com.Melolo.MeloloHTMLConstants as HTML
-import com.Melolo.MeloloAPIConstants as API
-import com.Melolo.MeloloAPI
-import com.Melolo.MeloloScraper
-import com.Melolo.MeloloConstants as Constants
+import com.lagradost.cloudstream3.utils.AppUtils.toJson
+import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.net.URLEncoder
 
-/**
- * 🚀 UNIVERSAL MEDIA ENGINE - VERSION 3.0.0 (MODULAR)
- * 
- * Arsitektur modular yang memisahkan logika orkestrasi (Melolo)
- * dengan mesin eksekusi spesifik:
- * - MeloloScraper: Engine untuk 7 provider bertipe HTML.
- * - MeloloAPI: Engine untuk 3 provider bertipe API.
- * 
- * LOGIC ALIGNMENT: Commit 5826152 (Ground Truth).
- */
-
-open class Melolo : MainAPI() {
-    
-    // Identity Detection (Lazy-Safe)
-    val isApiProvider: Boolean by lazy { 
-        listOf("Dramabox", "Melolo", "Idlix").contains(providerId)
-    }
-
-    // Cache untuk mempercepat akses konfigurasi (O(1))
-    private val configCache = mutableMapOf<Int, String>()
-    private val configListCache = mutableMapOf<Int, List<String>>()
-
-    val providerId: String by lazy { 
-        this::class.java.simpleName.replace("Provider", "")
-    }
-
-    override var name = "Base Provider"
-    override var mainUrl = "https://example.com"
-    open var seriesUrl = ""
-    open var searchUrl = ""
-
-    override val hasMainPage = true
+class Melolo : MainAPI() {
+    override var mainUrl = "https://api.tmthreader.com"
+    override var name = "Melolo😶"
     override var lang = "id"
+    override val hasMainPage = true
+    override val hasQuickSearch = true
     override val hasDownloadSupport = true
-    override val usesWebView = true
-    
-    override var supportedTypes = setOf<TvType>()
+    override val supportedTypes = setOf(TvType.TvSeries, TvType.AsianDrama)
 
-    // Engine Configurations
-    open var searchPathPattern = ""
-    open var mainPagePathPattern = ""
-    open var moviePathSegment = ""
-    open var tvPathSegment = ""
-    open var searchPageLimit = 2
-    open var reverseEpisodes = true
-    
-    // Performance & Stability
-    open var useDocumentLarge = false
-    open var loadRecursiveLimit = 2
-    open var loadLinksSemaphoreLimit = 6
+    private val aid = "645713"
+    private val catalogBase = "https://melolo-api-azure.vercel.app/api/melolo"
 
-    open var globalHeaders: Map<String, String> = emptyMap()
-
-    init {
-        // Late Initialization to avoid property access bugs in constructor
-        val api = isApiProvider
-        name = getCached(if (api) API.CONFIG_NAMES else HTML.CONFIG_NAMES, "Base Provider")
-        mainUrl = getCached(if (api) API.CONFIG_MAIN_URLS else HTML.CONFIG_MAIN_URLS, "https://example.com")
-        seriesUrl = getCached(if (api) API.CONFIG_SERIES_URLS else HTML.CONFIG_SERIES_URLS, mainUrl).let { if (it.isBlank()) mainUrl else it }
-        searchUrl = getCached(if (api) API.CONFIG_SEARCH_URLS else HTML.CONFIG_SEARCH_URLS, mainUrl).let { if (it.isBlank()) mainUrl else it }
-        lang = getCached(if (api) API.CONFIG_LANGS else HTML.CONFIG_LANGS, "id")
-        
-        supportedTypes = getCached(if (api) API.CONFIG_SUPPORTED_TYPES else HTML.CONFIG_SUPPORTED_TYPES, "Anime,AnimeMovie,TvSeries,Movie,AsianDrama")
-            .split(",").mapNotNull { type -> 
-                runCatching { TvType.entries.find { it.name.equals(type.trim(), true) } }.getOrNull() 
-            }.toSet()
-
-        searchPathPattern = getCached(if (api) API.CONFIG_SEARCH_PATH_PATTERNS else HTML.CONFIG_SEARCH_PATH_PATTERNS, "{baseUrl}/page/{page}/?s={query}")
-        mainPagePathPattern = getCached(if (api) API.CONFIG_MAIN_PAGE_PATH_PATTERNS else HTML.CONFIG_MAIN_PAGE_PATH_PATTERNS, "{baseUrl}/{data}{page}")
-        moviePathSegment = getCached(if (api) API.CONFIG_MOVIE_PATH_SEGMENTS else HTML.CONFIG_MOVIE_PATH_SEGMENTS, "/movie/")
-        tvPathSegment = getCached(if (api) API.CONFIG_TV_PATH_SEGMENTS else HTML.CONFIG_TV_PATH_SEGMENTS, "/anime/")
-        searchPageLimit = getCached(if (api) API.CONFIG_SEARCH_PAGE_LIMITS else HTML.CONFIG_SEARCH_PAGE_LIMITS, "2").toIntOrNull() ?: 2
-        reverseEpisodes = getCached(if (api) API.CONFIG_REVERSE_EPISODES else HTML.CONFIG_REVERSE_EPISODES, "true").toBoolean()
-        useDocumentLarge = getCached(if (api) API.CONFIG_USE_DOCUMENT_LARGE else HTML.CONFIG_USE_DOCUMENT_LARGE, "false").toBoolean()
-        loadRecursiveLimit = getCached(if (api) API.CONFIG_LOAD_RECURSIVE_LIMIT else HTML.CONFIG_LOAD_RECURSIVE_LIMIT, "2").toIntOrNull() ?: 2
-        loadLinksSemaphoreLimit = getCached(if (api) API.CONFIG_LOAD_LINKS_SEMAPHORE else HTML.CONFIG_LOAD_LINKS_SEMAPHORE, "6").toIntOrNull() ?: 6
-
-        globalHeaders = getCached(if (api) API.CONFIG_GLOBAL_HEADERS else HTML.CONFIG_GLOBAL_HEADERS, "User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-            .split("|").associate { val parts = it.split("="); if (parts.size == 2) parts[0] to parts[1] else "" to "" }.filter { it.key.isNotBlank() }
-    }
-
-    override val mainPage = mainPageOf(*resolveMainPageList().toTypedArray())
-
-    // ============================================
-    // REGION: CORE MAIN-API OVERRIDES
-    // ============================================
+    override val mainPage = mainPageOf(
+        "latest" to "Terbaru",
+        "trending" to "Trending",
+        "q:ceo" to "CEO",
+        "q:romansa" to "Romansa",
+        "q:sistem" to "Sistem",
+        "q:keluarga" to "Keluarga",
+        "q:mafia" to "Mafia",
+        "q:aksi" to "Aksi",
+        "q:balas dendam" to "Balas Dendam",
+        "q:pernikahan" to "Pernikahan",
+        "q:drama periode" to "Drama Periode",
+    )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        return safeApiCall(providerId) {
-            if (isApiProvider) {
-                MeloloAPI.getMainPage(this, page, request)
-            } else {
-                MeloloScraper.getMainPage(this, page, request)
-            }
-        } ?: pubNewHomePageResponse(request.name, emptyList())
-    }
-
-    override suspend fun search(query: String): List<SearchResponse> {
-        return safeApiCall(providerId) {
-            if (isApiProvider) {
-                MeloloAPI.search(this, query)
-            } else {
-                MeloloScraper.search(this, query)
-            }
-        } ?: emptyList()
-    }
-
-    override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query)
-
-    override suspend fun load(url: String): LoadResponse {
-        return safeApiCall(providerId) {
-            if (isApiProvider) {
-                MeloloAPI.load(this, url)
-            } else {
-                MeloloScraper.load(this, url)
-            }
-        } ?: throw Exception("Load failed for $url")
-    }
-
-    override suspend fun loadLinks(
-        data: String,
-        isCasting: Boolean,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        return safeApiCall(providerId) {
-            if (isApiProvider) {
-                MeloloAPI.loadLinks(this, data, subtitleCallback, callback)
-            } else {
-                MeloloScraper.loadLinks(this, data, subtitleCallback, callback)
-            }
-        } ?: false
-    }
-
-    // ============================================
-    // REGION: PUBLIC HELPERS (FOR ENGINES)
-    // ============================================
-
-    fun pubNewHomePageResponse(name: String, list: List<SearchResponse>, hasNext: Boolean = false) = newHomePageResponse(name, list, hasNext)
-    fun pubNewHomePageResponse(list: HomePageList, hasNext: Boolean = false) = newHomePageResponse(list, hasNext)
-    fun pubNewAnimeSearchResponse(name: String, url: String, type: TvType, fix: AnimeSearchResponse.() -> Unit = {}) = newAnimeSearchResponse(name, url, type) { fix() }
-    fun pubNewTvSeriesSearchResponse(name: String, url: String, type: TvType, fix: TvSeriesSearchResponse.() -> Unit = {}) = newTvSeriesSearchResponse(name, url, type) { fix() }
-    fun pubNewMovieSearchResponse(name: String, url: String, type: TvType, fix: MovieSearchResponse.() -> Unit = {}) = newMovieSearchResponse(name, url, type) { fix() }
-    fun pubNewEpisode(data: String, fix: Episode.() -> Unit = {}) = newEpisode(data, fix)
-    suspend fun pubNewAnimeLoadResponse(name: String, url: String, type: TvType, fix: suspend AnimeLoadResponse.() -> Unit = {}) = newAnimeLoadResponse(name, url, type) { fix() }
-    suspend fun pubNewTvSeriesLoadResponse(name: String, url: String, type: TvType, episodes: List<Episode>, fix: suspend TvSeriesLoadResponse.() -> Unit = {}) = newTvSeriesLoadResponse(name, url, type, episodes) { fix() }
-    suspend fun pubNewMovieLoadResponse(name: String, url: String, type: TvType, dataUrl: String, fix: suspend MovieLoadResponse.() -> Unit = {}) = newMovieLoadResponse(name, url, type, dataUrl) { fix() }
-
-    // ============================================
-    // REGION: INTERNAL UTILITIES
-    // ============================================
-
-    fun getCached(list: List<String>, default: String): String {
-        return configCache.getOrPut(list.hashCode()) { resolveConfig(list, default) }
-    }
-
-    fun getCachedList(list: List<String>): List<String> {
-        return configListCache.getOrPut(list.hashCode()) { resolveConfigList(list) }
-    }
-
-    private fun resolveConfig(list: List<String>, default: String): String {
-        for (item in list) { 
-            if (item.contains(":::")) { 
-                val owners = item.substringBefore(":::").split(",").map { it.trim() }
-                if (owners.contains(providerId)) { 
-                    val v = item.substringAfter(":::")
-                    if (v.isBlank()) break
-                    return v 
-                } 
+        val isSearchCategory = request.data.startsWith("q:", true)
+        if (page > 1 && !isSearchCategory) return newHomePageResponse(HomePageList(request.name, emptyList()), false)
+        
+        val (books, hasNext) = if (isSearchCategory) fetchSearchPage(request.data.removePrefix("q:").trim(), limit = 20, offset = (page.coerceAtLeast(1) - 1) * 20) 
+                            else (if (request.data == "trending") fetchTrending() else fetchLatest()) to false
+        
+        val items = books.mapNotNull { b -> 
+            newTvSeriesSearchResponse(b.book_name ?: return@mapNotNull null, "$mainUrl/series/${b.book_id ?: return@mapNotNull null}", TvType.TvSeries) { 
+                this.posterUrl = b.thumb_url 
             } 
         }
-        for (item in list) { 
-            if (item.startsWith("GLOBAL:::")) return item.substringAfter(":::")
-            if (!item.contains(":::")) return item 
-        }
-        return default
-    }
-
-    private fun resolveConfigList(list: List<String>): List<String> {
-        val result = mutableListOf<String>()
-        for (item in list) { 
-            if (item.contains(":::")) { 
-                val owners = item.substringBefore(":::").split(",").map { it.trim() }
-                if (owners.contains(providerId)) { 
-                    val v = item.substringAfter(":::")
-                    if (v.isNotBlank()) result.add(v) 
-                } 
-            } 
-        }
-        if (result.isNotEmpty()) return result
-        for (item in list) { 
-            val v = if (item.contains(":::")) { 
-                if (item.startsWith("GLOBAL:::")) item.substringAfter(":::") else continue 
-            } else item; if (v.isNotBlank()) result.add(v) 
-        }
+        
+        val result = newHomePageResponse(HomePageList(request.name, items), hasNext)
         return result
     }
 
-    private fun resolveMainPageList(): List<Pair<String, String>> {
-        val raw = getCached(if (isApiProvider) API.CONFIG_MAIN_PAGE_LISTS else HTML.CONFIG_MAIN_PAGE_LISTS, "trending/page/|Sedang Tren")
-        return raw.split(";").mapNotNull { 
-            val parts = it.split("|")
-            if (parts.size == 2) parts[0] to parts[1] else null 
+    override suspend fun search(query: String): List<SearchResponse> {
+        val results = fetchSearch(query, 20, 0).mapNotNull { b -> 
+            newTvSeriesSearchResponse(b.book_name ?: return@mapNotNull null, "$mainUrl/series/${b.book_id ?: return@mapNotNull null}", TvType.TvSeries) { 
+                this.posterUrl = b.thumb_url 
+            } 
+        }
+        return results
+    }
+
+    override suspend fun search(query: String, page: Int): SearchResponseList? {
+        val items = fetchSearchPage(query, limit = 20, offset = (page.coerceAtLeast(1) - 1) * 20).first.mapNotNull { b -> 
+            newTvSeriesSearchResponse(b.book_name ?: return@mapNotNull null, "$mainUrl/series/${b.book_id ?: return@mapNotNull null}", TvType.TvSeries) { 
+                this.posterUrl = b.thumb_url 
+            } 
+        }
+        return items.toNewSearchResponseList()
+    }
+
+    override suspend fun load(url: String): LoadResponse {
+        val bookId = url.substringAfterLast("/").substringBefore("?").trim()
+        val detail = fetchDetail(bookId)
+        val episodes = detail.video_list.filter { it.disable_play != true }.mapNotNull { ep -> 
+            newEpisode(EpisodeData(bookId, detail.series_id_str ?: bookId, ep.vid ?: return@mapNotNull null, ep.vid_index ?: return@mapNotNull null, detail.video_platform ?: 3).toJson()) { 
+                this.name = "Episode ${ep.vid_index}"
+                this.posterUrl = ep.cover
+                this.episode = ep.vid_index 
+            } 
+        }.sortedBy { it.episode ?: Int.MAX_VALUE }
+        
+        return newTvSeriesLoadResponse(detail.series_title ?: "Melolo", "$mainUrl/series/$bookId", TvType.TvSeries, episodes) { 
+            this.plot = detail.series_intro
+            this.posterUrl = detail.series_cover 
         }
     }
 
-    suspend fun getHtmlParsed(url: String, referer: String? = null, skipCache: Boolean = false): Document {
-        val fixedUrl = fixUrlSmart(url, mainUrl)
-        if (!skipCache) { globalHtmlCache.get(fixedUrl)?.let { return it } }
-        return executeWithRetry { 
-            rateLimitDelay(fixedUrl)
-            val res = app.get(fixedUrl, timeout = Constants.DEFAULT_TIMEOUT, headers = globalHeaders, referer = referer ?: mainUrl)
-            val doc = if (useDocumentLarge) res.documentLarge else res.document
-            if (!skipCache) { globalHtmlCache.put(fixedUrl, doc) }
-            doc
+    override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
+        val ep = tryParseJson<EpisodeData>(data) ?: return false
+        val body = """{"video_id":"${ep.vid}","biz_param":{"video_id_type":0,"device_level":1,"video_platform":${ep.videoPlatform}},"NovelCommonParam":{"app_language":"id","sys_language":"id","user_language":"id","ui_language":"id","language":"id","region":"ID","current_region":"ID","app_region":"ID","sys_region":"ID","carrier_region":"ID","carrier_region_v2":"ID","fake_priority_region":"ID","time_zone":"Asia/Jakarta","mcc_mnc":"51011"}}""".trimIndent()
+        
+        val responseText = executeWithRetry {
+            rateLimitDelay(moduleName = "Melolo")
+            app.post("$mainUrl/novel/player/video_model/v1/?aid=$aid", requestBody = body.toRequestBody("application/json".toMediaType()), headers = mapOf("Content-Type" to "application/json", "X-Xs-From-Web" to "false", "User-Agent" to "okhttp/4.9.3", "Referer" to "$mainUrl/")).text
         }
+        
+        val resp = tryParseJson<PlayerVideoModelResponse>(responseText)
+        listOfNotNull(resp?.data?.main_url, resp?.data?.backup_url).distinct().forEach { url -> 
+            callback(newExtractorLink(name, "Melolo", url, ExtractorLinkType.VIDEO) { 
+                this.quality = Qualities.Unknown.value
+                this.referer = "$mainUrl/"
+                this.headers = mapOf("User-Agent" to "okhttp/4.9.3") 
+            }) 
+        }
+        return resp?.data?.main_url != null || resp?.data?.backup_url != null
     }
+
+    private suspend fun fetchLatest(): List<CatalogBook> {
+        return try {
+            val res = executeWithRetry { app.get("$catalogBase/latest", timeout = 30L) }
+            tryParseJson<CatalogLatestResponse>(res.text)?.books.orEmpty().filter { it.language.equals("id", true) }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    private suspend fun fetchTrending(): List<CatalogBook> {
+        return try {
+            val res = executeWithRetry { app.get("$catalogBase/trending", timeout = 30L) }
+            tryParseJson<CatalogTrendingResponse>(res.text)?.books.orEmpty().filter { it.language.equals("id", true) }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    private suspend fun fetchSearch(query: String, limit: Int, offset: Int): List<CatalogBook> {
+        return try {
+            val url = "$catalogBase/search?query=${URLEncoder.encode(query, "UTF-8")}&limit=$limit&offset=$offset"
+            val res = executeWithRetry { app.get(url, timeout = 30L) }
+            tryParseJson<CatalogSearchResponse>(res.text)?.data?.search_data?.flatMap { it.books }.orEmpty().filter { it.language.equals("id", true) }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    private suspend fun fetchSearchPage(query: String, limit: Int, offset: Int): Pair<List<CatalogBook>, Boolean> {
+        return try {
+            val url = "$catalogBase/search?query=${URLEncoder.encode(query, "UTF-8")}&limit=$limit&offset=$offset"
+            val res = executeWithRetry { app.get(url, timeout = 30L) }
+            val resp = tryParseJson<CatalogSearchResponse>(res.text)
+            (resp?.data?.search_data?.flatMap { it.books }.orEmpty().filter { it.language.equals("id", true) }) to (resp?.data?.has_more == true)
+        } catch (_: Exception) { emptyList<CatalogBook>() to false }
+    }
+
+    private suspend fun fetchDetail(bookId: String): CatalogVideoData {
+        val res = executeWithRetry { app.get("$catalogBase/detail/$bookId", timeout = 30L) }
+        return tryParseJson<CatalogDetailResponse>(res.text)?.data?.video_data ?: throw ErrorLoadingException("Empty detail data")
+    }
+
+    data class CatalogLatestResponse(@JsonProperty("books") val books: List<CatalogBook> = emptyList())
+    data class CatalogTrendingResponse(@JsonProperty("books") val books: List<CatalogBook> = emptyList())
+    data class CatalogSearchResponse(@JsonProperty("data") val data: CatalogSearchData? = null)
+    data class CatalogSearchData(@JsonProperty("has_more") val has_more: Boolean? = null, @JsonProperty("search_data") val search_data: List<CatalogSearchBlock> = emptyList())
+    data class CatalogSearchBlock(@JsonProperty("books") val books: List<CatalogBook> = emptyList())
+    data class CatalogBook(@JsonProperty("book_id") val book_id: String? = null, @JsonProperty("book_name") val book_name: String? = null, @JsonProperty("thumb_url") val thumb_url: String? = null, @JsonProperty("language") val language: String? = null)
+    data class CatalogDetailResponse(@JsonProperty("data") val data: CatalogDetailData? = null)
+    data class CatalogDetailData(@JsonProperty("video_data") val video_data: CatalogVideoData? = null)
+    data class CatalogVideoData(@JsonProperty("series_id_str") val series_id_str: String? = null, @JsonProperty("series_title") val series_title: String? = null, @JsonProperty("series_intro") val series_intro: String? = null, @JsonProperty("series_cover") val series_cover: String? = null, @JsonProperty("video_list") val video_list: List<CatalogEpisode> = emptyList(), @JsonProperty("video_platform") val video_platform: Int? = null)
+    data class CatalogEpisode(@JsonProperty("vid") val vid: String? = null, @JsonProperty("vid_index") val vid_index: Int? = null, @JsonProperty("cover") val cover: String? = null, @JsonProperty("disable_play") val disable_play: Boolean? = null)
+    data class PlayerVideoModelResponse(@JsonProperty("data") val data: PlayerVideoModelData? = null)
+    data class PlayerVideoModelData(@JsonProperty("main_url") val main_url: String? = null, @JsonProperty("backup_url") val backup_url: String? = null)
+    data class EpisodeData(@JsonProperty("bookId") val bookId: String, @JsonProperty("seriesId") val seriesId: String, @JsonProperty("vid") val vid: String, @JsonProperty("episode") val episode: Int, @JsonProperty("videoPlatform") val videoPlatform: Int = 3)
 }
