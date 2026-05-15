@@ -124,17 +124,6 @@ Semua konten berasal dari pihak ketiga/public source di internet.
 
 ---
 
-# 🌟 Support
-
-Kalau project ini membantu:
-
-⭐ Star repository ini  
-🍴 Fork project ini  
-🐛 Report bug lewat Issues  
-🚀 Contribute provider baru  
-
----
-
 <div align="center">
 
 # 🍿 Happy Streaming
