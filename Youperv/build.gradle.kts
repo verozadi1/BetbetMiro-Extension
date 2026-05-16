@@ -3,7 +3,7 @@ version = 1
 
 cloudstream {
     authors     = listOf("BetbetMiro")
-    language    = "en"
+    language    = "id"
     description = "YouPerv is a great new porn website with HD high quality content. Site has the best of movies. Enjoy free full hd porn videos. The best straight latest sex movies with anal, big cock, big tits, hot milfs and sex clips."
     status  = 1 // will be 3 if unspecified
     tvTypes = listOf("NSFW")

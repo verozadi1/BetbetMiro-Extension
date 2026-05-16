@@ -14,7 +14,7 @@ class YMaal : MainAPI() {
     override var mainUrl = "https://ymaal.co"
     override var name = "YMaal"
     override val hasMainPage = true
-    override var lang = "hi"
+    override var lang = "id"
     override val hasDownloadSupport = true
 
     override val supportedTypes = setOf(TvType.NSFW)

@@ -3,7 +3,7 @@ version = 5
 
 cloudstream {
     authors     = listOf("BetbetMiro")
-    language    = "en"
+    language    = "id"
     description = "Dive into a wild world of Porn Videos! Feast on free movies in spicy 4K & HD. Ads won’t crash your party!"
     status  = 1 // will be 3 if unspecified
     tvTypes = listOf("NSFW")

@@ -10,7 +10,7 @@ open class XStream : MainAPI() {
     override var name = "XStream"
     override var mainUrl = "https://vidsrc.net"
     override var supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
-    override var lang = "en"
+    override var lang = "id"
     override val hasMainPage = true
 
     // Kita ubah visibilitasnya menjadi protected/public agar bisa diakses oleh Extractor

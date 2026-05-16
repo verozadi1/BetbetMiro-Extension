@@ -19,7 +19,7 @@ cloudstream {
     tvTypes = listOf(
         "NSFW"
     )
-    language = "hi"
+    language = "id"
 
     iconUrl = "https://ymaal.co/wp-content/uploads/2025/08/cropped-YMaal.png"
 }

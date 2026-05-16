@@ -9,7 +9,7 @@ class PornhoarderPlugin : MainAPI() {
     override var mainUrl              = "https://ww3.pornhoarder.org"
     override var name                 = "Pornhoarder"
     override val hasMainPage          = true
-    override var lang                 = "en"
+    override var lang                 = "id"
     override val hasDownloadSupport   = true
     override val hasChromecastSupport = true
     override val supportedTypes       = setOf(TvType.NSFW)

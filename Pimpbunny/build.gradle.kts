@@ -3,7 +3,7 @@ version = 5
 
 cloudstream {
     authors     = listOf("BetbetMiro")
-    language    = "en"
+    language    = "id"
     description = "Looking for the hottest content on the internet? PimpBunny brings you the hottest porn videos and lets you chat with the content creators."
 
     status  = 1

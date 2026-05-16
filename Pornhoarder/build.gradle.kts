@@ -2,7 +2,7 @@ version = 8
 
 cloudstream {
     authors     = listOf("BetbetMiro")
-    language    = "en"
+    language    = "id"
     description = "Pornhoarder"
 
     /**

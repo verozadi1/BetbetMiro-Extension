@@ -15,7 +15,7 @@ class Pimpbunny : MainAPI() {
     override var mainUrl = "https://pimpbunny.com"
     override var name = "Pimpbunny"
     override val hasMainPage = true
-    override var lang = "en"
+    override var lang = "id"
     override val hasQuickSearch = true
     override val supportedTypes = setOf(TvType.NSFW)
     override val vpnStatus = VPNStatus.MightBeNeeded

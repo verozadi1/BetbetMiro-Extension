@@ -24,7 +24,7 @@ class XnxxProvider : MainAPI() {
     override var name = "XNXX"
     // ... (các thuộc tính khác giữ nguyên) ...
     override val hasMainPage = true
-    override var lang = "en"
+    override var lang = "id"
     override val hasChromecastSupport = true
     override val supportedTypes = setOf(
         TvType.NSFW

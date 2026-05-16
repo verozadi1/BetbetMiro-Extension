@@ -8,7 +8,7 @@ class TrendyPorn : MainAPI() {
     override var mainUrl              = "https://www.trendyporn.com"
     override var name                 = "TrendyPorn"
     override val hasMainPage          = true
-    override var lang                 = "en"
+    override var lang                 = "id"
     override val hasQuickSearch       = false
     override val hasDownloadSupport   = true
     override val supportedTypes       = setOf(TvType.NSFW)

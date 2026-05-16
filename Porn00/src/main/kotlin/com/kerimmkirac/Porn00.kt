@@ -25,7 +25,7 @@ class Porn00(context: Context) : MainAPI() {
     override var mainUrl              = "https://www.porn00.org"
     override var name                 = "Porn00"
     override val hasMainPage          = true
-    override var lang                 = "en"
+    override var lang                 = "id"
     override val hasQuickSearch       = false
     override val supportedTypes       = setOf(TvType.NSFW)
     override val vpnStatus            = VPNStatus.MightBeNeeded

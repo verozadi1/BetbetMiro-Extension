@@ -13,7 +13,7 @@ class Youperv : MainAPI() {
     override var mainUrl = "https://youperv.com"
     override var name = "Youperv"
     override val hasMainPage = true
-    override var lang = "en"
+    override var lang = "id"
     override val hasQuickSearch = false
     override val supportedTypes = setOf(TvType.NSFW)
     override val vpnStatus = VPNStatus.MightBeNeeded

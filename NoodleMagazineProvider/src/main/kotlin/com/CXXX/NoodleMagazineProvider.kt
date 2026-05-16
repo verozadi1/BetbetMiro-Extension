@@ -12,7 +12,7 @@ class NoodleMagazineProvider : MainAPI() { // all providers must be an instance 
     override var mainUrl = "https://tyler-brown.com"
     override var name = "Noodle Magazine"
     override val hasMainPage = true
-    override var lang = "en"
+    override var lang = "id"
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(
         TvType.NSFW

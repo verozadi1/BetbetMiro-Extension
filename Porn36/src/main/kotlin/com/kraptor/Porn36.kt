@@ -13,7 +13,7 @@ class Porn36 : MainAPI() {
     override var mainUrl              = "https://www.porn36.com"
     override var name                 = "Porn36"
     override val hasMainPage          = true
-    override var lang                 = "en"
+    override var lang                 = "id"
     override val hasQuickSearch       = false
     override val supportedTypes       = setOf(TvType.NSFW)
 

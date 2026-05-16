@@ -21,7 +21,7 @@ class Xhamster : MainAPI() {
     override var mainUrl = "https://xhamster.com"
     override var name = "xHamster"
     override val supportedTypes = setOf(TvType.NSFW) 
-    override var lang = "en"
+    override var lang = "id"
     override val hasMainPage = true
     override val hasQuickSearch = true 
 

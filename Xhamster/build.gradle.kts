@@ -2,7 +2,7 @@ version = 9
 
 cloudstream {
     authors     = listOf("BetbetMiro")
-    language    = "en"
+    language    = "id"
     description = "Awas Jangan Coli Kawan"
 
     /**

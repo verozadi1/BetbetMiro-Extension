@@ -3,7 +3,7 @@ version = 10
 
 cloudstream {
     authors     = listOf("BetbetMiror")
-    language    = "en"
+    language    = "id"
     description = "PornWatch - Porn Watch Online Free. Biggest Porn Movies Online Database. Watch and Download Full Porn Movie DVD in High Definition Quality. Latest Collection of Porn Movies DVD Free"
 
     /**

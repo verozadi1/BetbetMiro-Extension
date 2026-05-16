@@ -13,7 +13,7 @@ class PornWatch : MainAPI() {
     override var mainUrl              = "https://pornwatch.ws"
     override var name                 = "PornWatch"
     override val hasMainPage          = true
-    override var lang                 = "en"
+    override var lang                 = "id"
     override val hasQuickSearch       = false
     override val supportedTypes       = setOf(TvType.NSFW)
 
