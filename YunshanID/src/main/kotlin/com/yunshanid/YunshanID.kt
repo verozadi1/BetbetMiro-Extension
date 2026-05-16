@@ -26,7 +26,7 @@ class YunshanID : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        // Panggil langsung endpoint daftar donghua
+        // Panggil langsung endpoint daftar donghua publik
         val response = app.get("$API_BASE/donghuas").text
         val items = tryParseJson<List<YunshanItem>>(response) ?: emptyList()
         
@@ -44,7 +44,7 @@ class YunshanID : MainAPI() {
             }
         }
 
-        // Karena API mereka langsung melempar semua data, kita matikan hasNext (false)
+        // Karena API mereka langsung mengembalikan semua daftar dalam satu amunisi, matikan hasNext (false)
         return newHomePageResponse(HomePageList(request.name, homeResults), false)
     }
 
@@ -65,7 +65,7 @@ class YunshanID : MainAPI() {
         // Mengambil detail berdasarkan ID donghua yang dipilih
         val response = app.get("$API_BASE/donghua/$id").text
         
-        // Mengantisipasi jika API mengembalikan objek tunggal atau array isi 1
+        // Mengantisipasi jika API mengembalikan objek tunggal atau berbentuk list array
         val item = tryParseJson<YunshanItem>(response) 
             ?: tryParseJson<List<YunshanItem>>(response)?.firstOrNull()
             ?: throw ErrorLoadingException("Detail Donghua gagal dimuat")
@@ -81,7 +81,7 @@ class YunshanID : MainAPI() {
                 this.plot = description
             }
         } else {
-            // Mengurutkan episode dari nomor terkecil ke terbesar
+            // Mengurutkan nomor episode secara otomatis dari terkecil ke terbesar
             val episodes = item.episodesMap?.sorted()?.map { epNum ->
                 newEpisode("$id-$epNum") {
                     this.name = "Episode $epNum"
@@ -107,28 +107,37 @@ class YunshanID : MainAPI() {
         val animeId = parts[0]
         val epNum = parts[1]
 
-        // 1. Tembak langsung rute api/watch hasil temuanmu!
+        // 1. Ambil data respon teks dari API player Yunshan ID
         val watchResponse = app.get("$API_BASE/watch/$animeId/$epNum").text
 
-        // 2. Mencari URL pemutar video (seperti ok.ru atau iframe lainnya) di dalam text response
-        // Menggunakan regex untuk menangkap link url di dalam string JSON tersebut
-        val linkRegex = """https?://[^\s"'\\]+""".toRegex()
-        val foundLinks = linkRegex.findAll(watchResponse).map { it.value }.toList()
+        // 2. Bersihkan karakter pelindung escape backslash (\/) bawaan database JSON
+        // Ini dilakukan agar link utuh tidak terpotong menjadi "https:/" saat dibaca Regex
+        val cleanResponse = watchResponse.replace("\\/", "/")
+
+        // 3. Gunakan Regex untuk mengambil URL penuh di dalam tanda kutip string JSON
+        val linkRegex = """https?://[^\s"']+""".toRegex()
+        val foundLinks = linkRegex.findAll(cleanResponse).map { it.value }.toList()
 
         var linkFound = false
         for (link in foundLinks) {
-            // Jika link mengarah ke provider video yang dikenali CloudStream (misal ok.ru)
-            if (link.contains("ok.ru") || link.contains("odnoklassniki") || link.contains("video")) {
-                loadExtractor(link, subtitleCallback, callback)
+            // Bersihkan sisa-sisa karakter kutip atau backslash di ujung tautan jika ada
+            val cleanLink = link.trim().removeSuffix("\\").removeSuffix("\"").removeSuffix("'")
+            
+            // Masukkan ke sistem filter extractor pemutar video (mendukung ok.ru / odnoklassniki)
+            if (cleanLink.contains("ok.ru") || cleanLink.contains("odnoklassniki") || cleanLink.contains("video")) {
+                loadExtractor(cleanLink, subtitleCallback, callback)
                 linkFound = true
             }
         }
 
-        // Jika extractor bawaan tidak sengaja melewatkannya, kita coba paksa muat link pertama yang valid
+        // 4. Jalur Cadangan: Jika filter di atas meleset, paksa coba lempar link pertama 
+        // yang terdeteksi ke mesin ekstrasi universal bawaan CloudStream
         if (!linkFound && foundLinks.isNotEmpty()) {
-            val primaryLink = foundLinks.first()
-            loadExtractor(primaryLink, subtitleCallback, callback)
-            linkFound = true
+            val primaryLink = foundLinks.first().trim().removeSuffix("\\").removeSuffix("\"").removeSuffix("'")
+            if (primaryLink.startsWith("http")) {
+                loadExtractor(primaryLink, subtitleCallback, callback)
+                linkFound = true
+            }
         }
 
         return linkFound
