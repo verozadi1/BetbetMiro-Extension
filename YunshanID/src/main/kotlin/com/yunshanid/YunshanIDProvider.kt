@@ -7,10 +7,10 @@ import com.lagradost.cloudstream3.plugins.Plugin
 @CloudstreamPlugin
 class YunshanIDProvider: Plugin() {
     override fun load(context: Context) {
-        // Mendaftarkan API Utama
+        // Mendaftarkan API Utama Yunshan ID
         registerMainAPI(YunshanID())
         
-        // Mendaftarkan semua Extractor Video pendukung yang ada di folder
+        // Mendaftarkan semua mesin Extractor Video pendukung
         registerExtractorAPI(Dailymotion())
         registerExtractorAPI(Geodailymotion())
         registerExtractorAPI(Odnoklassniki())

@@ -7,11 +7,11 @@ import com.lagradost.cloudstream3.utils.*
 
 class YunshanID : MainAPI() {
     override var mainUrl = "https://yunshanid.site"
-    override var name = "Yunshan ID 🏔️"
+    override var name = "Yunshan ID 🏔️ Lagi Tahap Perbaikan"
     override val hasMainPage = true
     override var lang = "id"
     override val hasDownloadSupport = true
-    override val supportedTypes = setOf(TvType.Anime, TvType.Movie) // FIX: Menggunakan TvType.Movie resmi
+    override val supportedTypes = setOf(TvType.Anime, TvType.Movie)
 
     companion object {
         const val API_BASE = "https://yunshanid.site/api"
@@ -39,23 +39,14 @@ class YunshanID : MainAPI() {
             newAnimeSearchResponse(item.title, "$mainUrl/donghua/${item.id}", TvType.Anime) {
                 this.posterUrl = item.posterUrl ?: item.poster
                 
-                // FIX: Menggunakan sorted & lastOrNull agar 100% lolos compile versi Kotlin manapun
-                val maxEp = item.episodesMap?.sorted()?.lastOrNull()
+                val maxEp = item.episodesMap?.maxOrNull()
                 if (maxEp != null) {
                     this.latestEpisode = maxEp
                 }
             }
         }
 
-        // FIX: Menggunakan deklarasi parameter eksplisit (list = ...) agar sesuai signature CloudStream
-        return newHomePageResponse(
-            list = HomePageList(
-                name = request.name,
-                list = homeResults,
-                isHorizontalImages = false
-            ),
-            hasNext = false
-        )
+        return newHomePageResponse(HomePageList(request.name, homeResults), false)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
@@ -66,7 +57,7 @@ class YunshanID : MainAPI() {
             newAnimeSearchResponse(item.title, "$mainUrl/donghua/${item.id}", TvType.Anime) {
                 this.posterUrl = item.posterUrl ?: item.poster
                 
-                val maxEp = item.episodesMap?.sorted()?.lastOrNull()
+                val maxEp = item.episodesMap?.maxOrNull()
                 if (maxEp != null) {
                     this.latestEpisode = maxEp
                 }
@@ -91,7 +82,6 @@ class YunshanID : MainAPI() {
         val tvType = if (item.type?.contains("Movie", true) == true) TvType.Movie else TvType.TvSeries
 
         if (tvType == TvType.Movie) {
-            // FIX: Menggunakan TvType.Movie resmi bawaan core library
             return newMovieLoadResponse(title, url, TvType.Movie, "$id-1") {
                 this.posterUrl = poster
                 this.plot = description
