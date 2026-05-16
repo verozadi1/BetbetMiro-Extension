@@ -2,24 +2,19 @@ package com.horis.cncverse
 
 import android.content.Context
 import com.horis.cncverse.entities.EpisodesData
-import com.horis.cncverse.entities.PlayList
 import com.horis.cncverse.entities.PostData
 import com.horis.cncverse.entities.SearchData
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
-import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.Qualities
-import com.lagradost.cloudstream3.utils.httpsify
-import com.lagradost.cloudstream3.utils.getQualityFromName
 import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import com.lagradost.cloudstream3.APIHolder.unixTime
 
-class NetflixMirrorProvider : MainAPI() {
+class PrimeVideoMirrorProvider : MainAPI() {
     companion object {
         var context: Context? = null
     }
@@ -30,10 +25,10 @@ class NetflixMirrorProvider : MainAPI() {
         TvType.Anime,
         TvType.AsianDrama
     )
-    override var lang = "id"
+    override var lang = "ta"
 
     override var mainUrl = "https://net52.cc"
-    override var name = "Netflix"
+    override var name = "Prime Video"
 
     override val hasMainPage = true
     private var cookie_value = ""
@@ -61,7 +56,7 @@ class NetflixMirrorProvider : MainAPI() {
         cookie_value = if(cookie_value.isEmpty()) bypass(mainUrl) else cookie_value
         val cookies = mapOf(
             "t_hash_t" to cookie_value,
-            "ott" to "nf",
+            "ott" to "pv",
             "hd" to "on"
         )
         val document = app.get(
@@ -90,7 +85,7 @@ class NetflixMirrorProvider : MainAPI() {
         //     fixUrlNull(selectFirst(".card-img-container img, .top10-img img")?.attr("data-src"))
 
         return newAnimeSearchResponse("", Id(id).toJson()) {
-            this.posterUrl = "https://imgcdn.kim/poster/v/$id.jpg"
+            this.posterUrl = "https://imgcdn.kim/pv/v/$id.jpg"
             posterHeaders = mapOf("Referer" to "$mainUrl/home")
         }
     }
@@ -100,14 +95,14 @@ class NetflixMirrorProvider : MainAPI() {
         val cookies = mapOf(
             "t_hash_t" to cookie_value,
             "hd" to "on",
-            "ott" to "nf"
+            "ott" to "pv"
         )
-        val url = "$mainUrl/mobile/search.php?s=$query&t=${APIHolder.unixTime}"
+        val url = "$mainUrl/mobile/pv/search.php?s=$query&t=${APIHolder.unixTime}"
         val data = app.get(url, referer = "$mainUrl/home", cookies = cookies).parsed<SearchData>()
 
         return data.searchResult.map {
             newAnimeSearchResponse(it.t, Id(it.id).toJson()) {
-                posterUrl = "https://imgcdn.kim/poster/v/${it.id}.jpg"
+                posterUrl = "https://imgcdn.kim/pv/v/${it.id}.jpg"
                 posterHeaders = mapOf("Referer" to "$mainUrl/home")
             }
         }
@@ -119,10 +114,10 @@ class NetflixMirrorProvider : MainAPI() {
         val cookies = mapOf(
             "t_hash_t" to cookie_value,
             "hd" to "on",
-            "ott" to "nf"
+            "ott" to "pv"
         )
         val data = app.get(
-            "$mainUrl/mobile/post.php?id=$id&t=${APIHolder.unixTime}",
+            "$mainUrl/mobile/pv/post.php?id=$id&t=${APIHolder.unixTime}",
             headers,
             referer = "$mainUrl/home",
             cookies = cookies
@@ -146,7 +141,7 @@ class NetflixMirrorProvider : MainAPI() {
 
         val suggest = data.suggest?.map {
             newAnimeSearchResponse("", Id(it.id).toJson()) {
-                this.posterUrl = "https://imgcdn.kim/poster/v/${it.id}.jpg"
+                this.posterUrl = "https://imgcdn.kim/pv/v/${it.id}.jpg"
                 posterHeaders = mapOf("Referer" to "$mainUrl/home")
             }
         }
@@ -161,7 +156,7 @@ class NetflixMirrorProvider : MainAPI() {
                     this.name = it.t
                     this.episode = it.ep.replace("E", "").toIntOrNull()
                     this.season = it.s.replace("S", "").toIntOrNull()
-                    this.posterUrl = "https://imgcdn.kim/poster/v/150/${it.id}.jpg"
+                    this.posterUrl = "https://imgcdn.kim/pvepimg/${it.id}.jpg"
                     this.runTime = it.time.replace("m", "").toIntOrNull()
                 }
             }
@@ -178,8 +173,8 @@ class NetflixMirrorProvider : MainAPI() {
         val type = if (data.episodes.first() == null) TvType.Movie else TvType.TvSeries
 
         return newTvSeriesLoadResponse(title, url, type, episodes) {
-            posterUrl = "https://imgcdn.kim/poster/v/$id.jpg"
-            backgroundPosterUrl = "https://imgcdn.kim/poster/v/$id.jpg"
+            posterUrl = "https://imgcdn.kim/pv/v/$id.jpg"
+            backgroundPosterUrl = "https://imgcdn.kim/pv/h/$id.jpg"
             posterHeaders = mapOf("Referer" to "$mainUrl/home")
             plot = data.desc
             year = data.year.toIntOrNull()
@@ -199,12 +194,12 @@ class NetflixMirrorProvider : MainAPI() {
         val cookies = mapOf(
             "t_hash_t" to cookie_value,
             "hd" to "on",
-            "ott" to "nf"
+            "ott" to "pv"
         )
         var pg = page
         while (true) {
             val data = app.get(
-                "$mainUrl/mobile/episodes.php?s=$sid&series=$eid&t=${APIHolder.unixTime}&page=$pg",
+                "$mainUrl/mobile/pv/episodes.php?s=$sid&series=$eid&t=${APIHolder.unixTime}&page=$pg",
                 headers,
                 referer = "$mainUrl/home",
                 cookies = cookies
@@ -214,7 +209,7 @@ class NetflixMirrorProvider : MainAPI() {
                     name = it.t
                     episode = it.ep.replace("E", "").toIntOrNull()
                     season = it.s.replace("S", "").toIntOrNull()
-                    this.posterUrl = "https://imgcdn.kim/epimg/150/${it.id}.jpg"
+                    this.posterUrl = "https://imgcdn.kim/pvepimg/${it.id}.jpg"
                     this.runTime = it.time.replace("m", "").toIntOrNull()
                 }
             }
@@ -230,43 +225,20 @@ class NetflixMirrorProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val (title, id) = parseJson<LoadData>(data)
-        val cookies = mapOf(
-            "t_hash_t" to cookie_value,
-            "hd" to "on",
-            "ott" to "nf"
+        val apiBase = resolveApiUrl()
+        val id = parseJson<LoadData>(data).id
+        val response = app.get(
+            "$apiBase/newtv/player.php?id=$id",
+            headers = buildNewTvHeaders("pv", mapOf("Usertoken" to ""))
+        ).parsed<NewTvPlayerResponse>()
+
+        if (response.status != "ok" || response.video_link.isNullOrBlank()) return false
+
+        callback.invoke(
+            newExtractorLink(name, name, response.video_link, type = ExtractorLinkType.M3U8) {
+                this.referer = response.referer ?: apiBase
+            }
         )
-        val playlist = app.get(
-            "$mainUrl/mobile/playlist.php?id=$id&t=$title&tm=${APIHolder.unixTime}",
-            headers,
-            referer = "$mainUrl/home",
-            cookies = cookies
-        ).parsed<PlayList>()
-
-        playlist.forEach { item ->
-            item.sources.forEach {
-                callback.invoke(
-                    newExtractorLink(
-                        name,
-                        it.label,
-                        "$mainUrl/${it.file}",
-                        type = ExtractorLinkType.M3U8
-                    ) {
-                        this.referer = "$mainUrl/home"
-                        this.quality = getQualityFromName(it.file.substringAfter("q=", ""))
-                    }
-                )
-            }
-
-            item.tracks?.filter { it.kind == "captions" }?.map { track ->
-                subtitleCallback.invoke(
-                    newSubtitleFile(
-                        track.label.toString(),
-                        httpsify(track.file.toString())
-                    )
-                )
-            }
-        }
 
         return true
     }
