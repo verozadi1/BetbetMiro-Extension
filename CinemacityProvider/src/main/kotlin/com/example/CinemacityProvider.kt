@@ -161,6 +161,8 @@ class CinemacityProvider : MainAPI() {
     override val mainPage = mainPageOf(
         "$mainUrl/tv-series/" to "Series",
         "$mainUrl/movies/" to "Movies",
+        "$mainUrl/xfsearch/genre/animation/" to "Animation",
+        "$mainUrl/xfsearch/genre/documentary/" to "Documentary"
     )
 
     override suspend fun getMainPage(
@@ -211,10 +213,19 @@ class CinemacityProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse>? {
-        val formData = mapOf("do" to "search", "subaction" to "search", "story" to query)
+        val url = "$mainUrl/engine/ajax/controller.php?mod=search"
+        val formData = mapOf(
+            "query" to query,
+            "skin" to "cinemacity",
+            "user_hash" to "83f28aada1ce377b5f3441e0bf022e4e119a736d"
+        )
         val resp = app.post(
-            mainUrl,
-            headers = protectionHeaders + ("Referer" to "$mainUrl/") + ("X-Requested-With" to "XMLHttpRequest"),
+            url,
+            headers = protectionHeaders + mapOf(
+                "Referer" to "$mainUrl/",
+                "Origin" to mainUrl,
+                "X-Requested-With" to "XMLHttpRequest"
+            ),
             cookies = dynamicCookies,
             data = formData,
             timeout = 15000L,
@@ -228,17 +239,26 @@ class CinemacityProvider : MainAPI() {
             return null
         }
 
-        val results = resp.document.select("div.dar-short_item").mapNotNull { it.toSearchResult() }
+        val results = resp.document.select("div.dle-fast_item").mapNotNull { it.toSearchResult() }
         Log.d("Cinemacity", "Search: query='$query', total items=${results.size}")
         enrichTmdbPosters(results)
         return results
     }
 
     override suspend fun quickSearch(query: String): List<SearchResponse>? {
-        val formData = mapOf("do" to "search", "subaction" to "search", "story" to query)
+        val url = "$mainUrl/engine/ajax/controller.php?mod=search"
+        val formData = mapOf(
+            "query" to query,
+            "skin" to "cinemacity",
+            "user_hash" to "83f28aada1ce377b5f3441e0bf022e4e119a736d"
+        )
         val resp = app.post(
-            mainUrl,
-            headers = protectionHeaders + ("Referer" to "$mainUrl/") + ("X-Requested-With" to "XMLHttpRequest"),
+            url,
+            headers = protectionHeaders + mapOf(
+                "Referer" to "$mainUrl/",
+                "Origin" to mainUrl,
+                "X-Requested-With" to "XMLHttpRequest"
+            ),
             cookies = dynamicCookies,
             data = formData,
             timeout = 15000L,
@@ -247,9 +267,8 @@ class CinemacityProvider : MainAPI() {
             if (it.cookies.isNotEmpty()) dynamicCookies = dynamicCookies + it.cookies
         }
         if (resp.code != 200) return null
-        return resp.document.select("div.dar-short_item").mapNotNull { it.toSearchResult() }
+        return resp.document.select("div.dle-fast_item").mapNotNull { it.toSearchResult() }
     }
-
 
     override suspend fun load(url: String): LoadResponse {
         val page = doRequest(url)
@@ -641,7 +660,11 @@ class CinemacityProvider : MainAPI() {
             if (match != null) {
                 tracks.put(
                     JSONObject().apply {
-                        put("language", match.groupValues[1])
+                        val cleanedLang = match.groupValues[1]
+                            .replace("(Full)", "", ignoreCase = true)
+                            .replace("(SDH)", "", ignoreCase = true)
+                            .trim()
+                        put("language", cleanedLang)
                         put("subtitleUrl", match.groupValues[2])
                     }
                 )
