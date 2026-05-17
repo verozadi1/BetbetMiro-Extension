@@ -65,6 +65,22 @@ class CinemacityProvider : MainAPI() {
 
     private val cfKiller = CloudflareKiller()
 
+    private var cachedUserHash: String? = null
+
+    private suspend fun getUserHash(): String {
+        cachedUserHash?.let { return it }
+        return try {
+            val html = doRequest(mainUrl).text
+            val hash = Regex("var dle_login_hash\\s*=\\s*'([^']*)'").find(html)?.groupValues?.getOrNull(1)
+                ?: Regex("name=\"user_hash\"\\s*value=\"([^\"]*)\"").find(html)?.groupValues?.getOrNull(1)
+                ?: "83f28aada1ce377b5f3441e0bf022e4e119a736d"
+            cachedUserHash = hash
+            hash
+        } catch (_: Throwable) {
+            "83f28aada1ce377b5f3441e0bf022e4e119a736d"
+        }
+    }
+
     private suspend fun doRequest(url: String): NiceResponse {
         return app.get(
             url,
@@ -217,7 +233,7 @@ class CinemacityProvider : MainAPI() {
         val formData = mapOf(
             "query" to query,
             "skin" to "cinemacity",
-            "user_hash" to "83f28aada1ce377b5f3441e0bf022e4e119a736d"
+            "user_hash" to getUserHash()
         )
         val resp = app.post(
             url,
@@ -250,7 +266,7 @@ class CinemacityProvider : MainAPI() {
         val formData = mapOf(
             "query" to query,
             "skin" to "cinemacity",
-            "user_hash" to "83f28aada1ce377b5f3441e0bf022e4e119a736d"
+            "user_hash" to getUserHash()
         )
         val resp = app.post(
             url,
@@ -610,12 +626,6 @@ class CinemacityProvider : MainAPI() {
                     .takeIf { it.isNotBlank() }
                     ?.let { streamUrls += it }
             }
-        }
-
-        if (streamUrls.isEmpty()) {
-            obj.optString("streamUrl")
-                .takeIf { it.isNotBlank() }
-                ?.let { streamUrls += it }
         }
 
         if (streamUrls.isEmpty()) return false
