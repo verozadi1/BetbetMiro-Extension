@@ -548,7 +548,6 @@ data class Moviebox2PlayData(
     @param:JsonProperty("streams") val streams: ArrayList<Moviebox2Stream>? = arrayListOf()
 )
 
-// Mengubah tipe ID menjadi Any? untuk menampung String maupun Integer murni dari API
 data class Moviebox2Stream(
     @param:JsonProperty("id") val id: Any? = null,
     @param:JsonProperty("url") val url: String? = null,
