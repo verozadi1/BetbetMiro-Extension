@@ -23,14 +23,12 @@ open class Donghuastream : MainAPI() {
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Anime)
 
-    // User-Agent browser resmi untuk mengamankan koneksi dari proteksi firewall web
     private val browserHeaders = mapOf(
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
         "Accept-Language" to "id,en-US;q=0.7,en;q=0.3"
     )
 
-    // Menyusun ulang data path parameter beranda agar rapi sesuai arsitektur tema WordPress
     override val mainPage = mainPageOf(
         "" to "Latest Update",
         "donghua/" to "Donghua Series",
@@ -51,15 +49,15 @@ open class Donghuastream : MainAPI() {
         }.replace("//", "/").replace("https:/", "https://")
 
         val document = app.get(url, headers = browserHeaders).document
-        // Menambahkan selector .utao yang menjadi standar list beranda donghuastream.org
-        val home = document.select("div.listupd .utao, div.listupd article.bs, div.listupd div.bs, .listupd .chor").mapNotNull {
+        // Membidik langsung ke elemen 'li' di dalam kontainer .utao agar tidak menggulung satu halaman penuh
+        val home = document.select("div.listupd .utao li, div.listupd article.bs, div.listupd div.bs, .listupd .chor").mapNotNull {
             it.toSearchResult()
         }
         return newHomePageResponse(request.name, home)
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val title = this.selectFirst(".tt, h2, h3, .tta, .title")?.text()?.trim() ?: return null
+        val title = this.selectFirst(".tt, h2, h3, .tta, .title, .entry-title")?.text()?.trim() ?: return null
         val href = fixUrl(this.selectFirst("a")?.attr("href") ?: return null)
         val posterUrl = this.selectFirst("img")?.getImageAttr()?.fixImageQuality()
         return newMovieSearchResponse(title, href, TvType.Anime) {
@@ -69,7 +67,7 @@ open class Donghuastream : MainAPI() {
 
     override suspend fun search(query: String): List<SearchResponse> {
         val document = app.get("$mainUrl/?s=$query", headers = browserHeaders).document
-        return document.select("div.listupd .utao, div.listupd article.bs, div.listupd div.bs, .listupd .chor").mapNotNull {
+        return document.select("div.listupd .utao li, div.listupd article.bs, div.listupd div.bs, .listupd .chor").mapNotNull {
             it.toSearchResult()
         }
     }
