@@ -73,12 +73,12 @@ class Newuservideo : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
-        val iframeSrc = app.get(url, referer = referer).document.selectFirst("iframe#videoFrame")?.attr("src")
+        val headersMap = referer?.let { mapOf("Referer" to it) } ?: emptyMap()
+        val iframeSrc = app.get(url, headers = headersMap).document.selectFirst("iframe#videoFrame")?.attr("src")
         if (iframeSrc.isNullOrBlank()) return
         val iframeUrl = fixUrl(iframeSrc)
 
-        val doc = app.get(iframeUrl, referer = "$mainUrl/").text
-        // Melakukan isolasi objek json secara ketat agar tidak mengangkut karakter berekor seperti semicolon
+        val doc = app.get(iframeUrl, headers = mapOf("Referer" to "$mainUrl/")).text
         val json = "VIDEO_CONFIG\\s?=\\s?(\\{.*?\\})".toRegex().find(doc)?.groupValues?.get(1)
             ?: "VIDEO_CONFIG\\s?=\\s?(.*)".toRegex().find(doc)?.groupValues?.get(1)
 
