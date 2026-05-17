@@ -272,17 +272,17 @@ class Alqanime : MainAPI() {
     }
 
     data class EpisodeLink(
-        @JsonProperty("url") val url: String,
-        @JsonProperty("quality") val quality: String
+        @param:JsonProperty("url") val url: String,
+        @param:JsonProperty("quality") val quality: String
     )
 
     data class PixeldrainList(
-        @JsonProperty("files") val files: List<PixeldrainFile> = emptyList()
+        @param:JsonProperty("files") val files: List<PixeldrainFile> = emptyList()
     )
 
     data class PixeldrainFile(
-        @JsonProperty("id") val id: String,
-        @JsonProperty("name") val name: String,
-        @JsonProperty("mime_type") val mimeType: String = ""
+        @param:JsonProperty("id") val id: String,
+        @param:JsonProperty("name") val name: String,
+        @param:JsonProperty("mime_type") val mimeType: String = ""
     )
 }
