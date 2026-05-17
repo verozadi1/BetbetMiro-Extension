@@ -1,7 +1,8 @@
-version = 16
+// use an integer for version numbers
+version = 25
 
 cloudstream {
-    description = "DutaMovie"
+    description = "DutaMovie - Nonton film box office, series, dan serial TV subtitle Indonesia"
     language = "id"
     authors = listOf("BetbetMiro")
 
@@ -17,7 +18,10 @@ cloudstream {
         "AsianDrama",
         "TvSeries",
         "Movie",
+        "Anime"
     )
 
-    iconUrl = "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://justilien.com&size=%size%"
+    iconUrl = "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://simplycufflinks.com&size=%size%"
+
+    isCrossPlatform = false
 }
