@@ -8,11 +8,8 @@ buildscript {
         maven("https://jitpack.io")
     }
     dependencies {
-        // Android Gradle Plugin
         classpath("com.android.tools.build:gradle:8.7.3")
-        // CloudStream Gradle Plugin
         classpath("com.github.recloudstream:gradle:master-SNAPSHOT")
-        // Kotlin
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.0")
     }
 }
@@ -38,6 +35,14 @@ fun Project.android(
     .configuration()
 
 subprojects {
+    // TAKTIK ISOLASI PAMUNGKAS: Jika modul ini BUKAN DrakorProvider, skip seluruh proses kompilasinya malam ini!
+    if (project.name != "DrakorProvider") {
+        tasks.configureEach {
+            enabled = false
+        }
+        return@subprojects
+    }
+
     apply(plugin = "com.android.library")
     apply(plugin = "kotlin-android")
     apply(plugin = "com.lagradost.cloudstream3.gradle")
@@ -49,19 +54,15 @@ subprojects {
         )
     }
 
-    // Menggunakan Compiler Options DSL Baru yang Kompatibel dengan Kotlin 2.x
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
-            // SAKLAR ANTI-MOGOK GLOBAL: Semua warning dicuekin total!
             allWarningsAsErrors.set(false)
         }
     }
 
     android {
-        // TRICK SULAP: Suntik namespace otomatis berbasis nama folder biar Allpornstream dkk gak memicu eror!
         namespace = "com.lagradost.${project.name.lowercase().replace("[^a-zA-Z0-9]".toRegex(), "")}"
-
         compileSdkVersion(35)
 
         defaultConfig {
@@ -75,47 +76,22 @@ subprojects {
         }
     }
 
-    // Menggunakan konfigurasi dependensi subproject yang sah agar tidak "Unresolved reference"
     project.dependencies {
         val implementation = "implementation"
-
         add(implementation, "org.jetbrains.kotlin:kotlin-stdlib:2.3.0")
-
-        // =========================
-        // NETWORK
-        // =========================
         add(implementation, "com.github.Blatzar:NiceHttp:0.4.13")
         add(implementation, "com.squareup.okhttp3:okhttp:4.12.0")
-
-        // =========================
-        // HTML PARSER
-        // =========================
         add(implementation, "org.jsoup:jsoup:1.18.3")
-
-        // =========================
-        // JSON
-        // =========================
         add(implementation, "com.fasterxml.jackson.module:jackson-module-kotlin:2.16.0")
         add(implementation, "com.fasterxml.jackson.core:jackson-databind:2.16.0")
         add(implementation, "com.google.code.gson:gson:2.11.0")
-
-        // =========================
-        // JAVASCRIPT ENGINE
-        // =========================
         add(implementation, "com.faendir.rhino:rhino-android:1.6.0")
         add(implementation, "app.cash.quickjs:quickjs-android:0.9.2")
-
-        // =========================
-        // UTILS
-        // =========================
         add(implementation, "me.xdrop:fuzzywuzzy:1.4.0")
         add(implementation, "androidx.core:core-ktx:1.16.0")
     }
 }
 
-// =========================
-// CLEAN
-// =========================
 task<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
