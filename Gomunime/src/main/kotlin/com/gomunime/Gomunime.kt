@@ -4,6 +4,7 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addAniListId
 import com.lagradost.cloudstream3.LoadResponse.Companion.addMalId
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URI
 import java.text.SimpleDateFormat
@@ -29,112 +30,85 @@ class Gomunime : MainAPI() {
         "$mainUrl/anime/page/%d/?status=&type=&order=popular" to "Popular",
         "$mainUrl/genres/action/page/%d/" to "Action",
         "$mainUrl/genres/fantasy/page/%d/" to "Fantasy",
-        "$mainUrl/genres/isekai/page/%d/" to "Isekai",
-        "$mainUrl/genres/reincarnation/page/%d/" to "Reincarnation",
+        "$mainUrl/genres/isekai/page/%d/" to "Isekai"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val document = app.get(request.data.format(page)).document
-        val home = document.select("article.bs").mapNotNull { it.toSearchResult() }
-        return newHomePageResponse(request.name, home)
+        val url = request.data.format(page)
+        val document = app.get(url).document
+        
+        // Mengambil susunan elemen kartu anime sesuai penyeleksian bawaanmu
+        val home = document.select("div.listupd div.bs, div.mangaip div.bs, .listupd .bsx, div.animposx").mapNotNull { 
+            it.toSearchResult() 
+        }
+        
+        // JURUS ANTI-ZONK: Dibungkus ke HomePageList agar baris kategori muncul di aplikasi!
+        return newHomePageResponse(
+            list = listOf(
+                HomePageList(
+                    name = request.name,
+                    list = home,
+                    isHorizontalImages = false // Kartu vertikal tegak khas poster anime
+                )
+            ),
+            hasNext = home.isNotEmpty()
+        )
     }
 
-    override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query)
+    private fun Element.toSearchResult(): SearchResponse? {
+        val title = this.selectFirst("div.tt h2, .tt h2, .tt, h2, title, .entry-title")?.text()?.trim() ?: return null
+        val href = fixUrl(this.selectFirst("a")?.attr("href") ?: return null)
+        val poster = fixUrlNull(this.selectFirst("img")?.attr("src") ?: this.selectFirst("img")?.attr("data-src")) ?: ""
+        
+        return newAnimeSearchResponse(title, href, TvType.Anime) {
+            this.posterUrl = poster
+        }
+    }
 
-    override suspend fun search(query: String): List<SearchResponse>? {
-        val document = app.get("$mainUrl/?s=$query").document
-        return document.select("article.bs").mapNotNull { it.toSearchResult() }
+    override suspend fun search(query: String): List<SearchResponse> {
+        val url = "$mainUrl/?s=$query"
+        val document = app.get(url).document
+        return document.select("div.listupd div.bs, div.mangaip div.bs, .listupd .bsx, div.animposx").mapNotNull { 
+            it.toSearchResult() 
+        }
     }
 
     override suspend fun load(url: String): LoadResponse? {
         val document = app.get(url).document
-        val title = document.selectFirst("h1.entry-title")?.text()?.trim() ?: return null
+        val title = document.selectFirst("h1.entry-title, .entry-title")?.text()?.replace("Subtitle Indonesia", "")?.trim() ?: ""
+        val poster = document.selectFirst("div.thumb img, .thumb img")?.attr("src") ?: ""
+        val type = getType(document.selectFirst(".spe span:contains(Type), .spe span:contains(Jenis)")?.text() ?: "")
+        
+        val episodes = document.getEpisodes(url)
 
-        val poster = document.selectFirst("div.single-info .thumb img")
-            ?.attr("src")
-            ?.takeIf { it.isNotBlank() }
-
-        val bodyText = document.body().text().replace(Regex("\\s+"), " ").trim()
-        val statusText = Regex("""Status:\s*([A-Za-z]+)""").find(bodyText)?.groupValues?.getOrNull(1) ?: ""
-        val typeText = Regex("""Type:\s*([A-Za-z]+)""").find(bodyText)?.groupValues?.getOrNull(1) ?: "TV"
-        val releaseText = Regex("""Released on:\s*([A-Za-z]+\s+\d{1,2},\s+\d{4})""")
-            .find(bodyText)?.groupValues?.getOrNull(1)
-        val year = releaseText?.let {
-            runCatching {
-                SimpleDateFormat("MMMM d, yyyy", Locale.US).parse(it)?.let { date ->
-                    SimpleDateFormat("yyyy", Locale.US).format(date).toIntOrNull()
-                }
-            }.getOrNull()
-        }
-
-        val description = document.selectFirst("div.desc.mindes")?.text()?.trim()
-            ?: document.selectFirst("div.entry-content")?.text()?.trim()
-
-        val tags = Regex("""bergenre\s+([^.]*)\.""", RegexOption.IGNORE_CASE)
-            .find(bodyText)
-            ?.groupValues
-            ?.getOrNull(1)
-            ?.split(",")
-            ?.map { it.trim() }
-            ?.filter { it.isNotBlank() }
-            ?: emptyList()
-
-        val episodes = extractEpisodeLinks(url, document)
-        val tracker = APIHolder.getTracker(listOf(title), TrackerType.getTypes(getType(typeText)), year, true)
-
-        return newAnimeLoadResponse(title, url, getType(typeText)) {
-            engName = title
-            posterUrl = tracker?.image ?: poster
-            backgroundPosterUrl = tracker?.cover
-            this.year = year
-            this.tags = tags
-            this.plot = description
-            showStatus = getStatus(statusText)
-            addEpisodes(DubStatus.Subbed, episodes)
-            addMalId(tracker?.malId)
-            addAniListId(tracker?.aniId?.toIntOrNull())
+        return if (type == TvType.AnimeMovie) {
+            newMovieLoadResponse(title, url, TvType.AnimeMovie, url) {
+                this.posterUrl = poster
+            }
+        } else {
+            newTvSeriesLoadResponse(title, url, TvType.Anime, episodes) {
+                this.posterUrl = poster
+                this.showStatus = getStatus(document.selectFirst(".spe span:contains(Status)")?.text() ?: "")
+            }
         }
     }
 
     override suspend fun loadLinks(
         data: String,
-        isCasting: Boolean,
+        isCaster: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        // Terkoneksi mulus dengan sistem pembongkar link di GomunimeExtractors.kt bawaanmu
         return loadGomunimeLinks(data, subtitleCallback, callback)
     }
 
-    private fun Element.toSearchResult(): AnimeSearchResponse? {
-        val a = selectFirst("a[href]") ?: return null
-        val href = fixUrlNull(a.attr("href")) ?: return null
-        val title = selectFirst("div.tt h3, div.tt h2, h3")?.text()?.trim()
-            ?: a.attr("title")?.trim()?.takeIf { it.isNotBlank() }
-            ?: return null
-        val posterUrl = selectFirst("img.ts-post-image")?.let { img ->
-            fixUrlNull(img.attr("data-original").takeIf { it.isNotBlank() } ?: img.attr("src"))
-        }
-        val type = getType(selectFirst("div.typez")?.text()?.trim() ?: "TV")
-        val epNum = selectFirst("span.epx")?.text()?.replace(Regex("\\D"), "")?.toIntOrNull()
-
-        return when (type) {
-            TvType.AnimeMovie -> newAnimeSearchResponse(title, href, TvType.AnimeMovie) {
-                this.posterUrl = posterUrl
-                addSub(epNum)
-            }
-            else -> newAnimeSearchResponse(title, href, TvType.Anime) {
-                this.posterUrl = posterUrl
-                addSub(epNum)
-            }
-        }
-    }
-
-    private fun extractEpisodeLinks(url: String, document: org.jsoup.nodes.Document): List<Episode> {
+    private fun Document.getEpisodes(url: String): List<Episode> {
         val slug = runCatching {
             URI(url).path.trim('/').substringAfter("anime/")
         }.getOrNull()?.takeIf { it.isNotBlank() } ?: return emptyList()
 
-        return document.select("a[href*=\"$slug-episode-\"]")
+        return this.select("a[href*=\"$slug-episode-\"], ul.episodios li a")
             .mapNotNull { a ->
                 val href = fixUrlNull(a.attr("href")) ?: return@mapNotNull null
                 val epNum = Regex("""episode-(\d+)""", RegexOption.IGNORE_CASE)
@@ -164,6 +138,10 @@ class Gomunime : MainAPI() {
 
     data class ServerOption(
         val name: String,
-        val url: String,
+        val url: String
     )
+
+    private fun fixUrlNull(url: String?): String? {
+        return url?.let { fixUrl(it) }
+    }
 }
