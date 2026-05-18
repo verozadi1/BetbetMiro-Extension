@@ -7,8 +7,8 @@ import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.M3u8Helper.Companion.generateM3u8
-import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
 
 class Jeniusplay : ExtractorApi() {
     override var name = "Jeniusplay"
@@ -23,17 +23,23 @@ class Jeniusplay : ExtractorApi() {
     ) {
         val cleanUrl = url.replace(" ", "%20")
         try {
+            // Ambil teks HTML mentah sebagai lapis pertahanan pertama
             val responseText = app.get(cleanUrl, referer = referer).text
+            val cleanHtml = responseText.replace("\\/", "/")
 
-            // LAPIS 1: Cari langsung link m3u8 di dalam teks halaman pemutar
-            val m3u8Regex = Regex("""["'](https?://[^"']+\.m3u8[^"']*)["']""")
-            val directM3u8 = m3u8Regex.find(responseText)?.groupValues?.get(1)
-            if (directM3u8 != null) {
-                generateM3u8(name, directM3u8, cleanUrl).forEach(callback)
+            // STRATEGI BYPASS 1: Cari langsung apakah ada link m3u8/mp4/txt nangkring di HTML halaman utama
+            val directStream = Regex("""https?://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*\.(?:m3u8|mp4|txt)[-a-zA-Z0-9+&@#/%=~_|]*""")
+                .findAll(cleanHtml)
+                .map { it.value }
+                .firstOrNull { !it.contains("jeniusplay.com/player/") && !it.contains("ajax.php") && !it.contains("index.php") }
+
+            if (directStream != null) {
+                val finalStreamUrl = directStream.replace(".txt", ".m3u8")
+                generateM3u8(name, finalStreamUrl, cleanUrl).forEach(callback)
                 return
             }
 
-            // LAPIS 2: Request ke Player API (Mendukung index.php atau ajax.php secara otomatis)
+            // STRATEGI BYPASS 2: Tembak API Player via POST (ajax.php atau index.php otomatis dideteksi)
             val hash = cleanUrl.split("/").last().substringAfter("data=")
             val endpoint = if (responseText.contains("ajax.php")) "$mainUrl/player/ajax.php?data=$hash&do=getVideo" else "$mainUrl/player/index.php?data=$hash&do=getVideo"
 
@@ -43,13 +49,16 @@ class Jeniusplay : ExtractorApi() {
                 referer = cleanUrl,
                 headers = mapOf("X-Requested-With" to "XMLHttpRequest")
             ).text
+            
+            val unescapedPost = postResponse.replace("\\/", "/")
+            
+            // UNIVERSAL SNIFFER: Ambil streaming link apa saja dari response JSON tanpa .parsed API kaku (anti runtime crash)
+            val extractedUrl = Regex("""https?://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*\.(?:m3u8|mp4|txt)[-a-zA-Z0-9+&@#/%=~_|]*""")
+                .find(unescapedPost)?.value
 
-            val videoUrl = Regex("""["']videoSource["']\s*:\s*["']([^"']+)["']""").find(postResponse)?.groupValues?.get(1)?.replace("\\/", "/")
-                ?: Regex("""["']file["']\s*:\s*["']([^"']+)["']""").find(postResponse)?.groupValues?.get(1)?.replace("\\/", "/")
-
-            if (videoUrl != null) {
-                val finalUrl = videoUrl.replace(".txt", ".m3u8")
-                generateM3u8(name, finalUrl, cleanUrl).forEach(callback)
+            if (extractedUrl != null) {
+                val finalStreamUrl = extractedUrl.replace(".txt", ".m3u8")
+                generateM3u8(name, finalStreamUrl, cleanUrl).forEach(callback)
             }
         } catch (e: Exception) {
             Log.e(name, "Extraction failed for $cleanUrl: ${e.message}")
@@ -75,21 +84,22 @@ class Majorplay : ExtractorApi() {
         try {
             val domain = "https://" + java.net.URI(url).host
             val document = app.get(url, referer = domain).document
-            val htmlContent = document.html()
+            val htmlContent = document.html().replace("\\/", "/")
             
+            // UNIVERSAL SNIFFER: Scrape link .m3u8/.mp4 langsung dari isi HTML untuk menembus perubahan skrip player
             var m3uLink = document.select("source").attr("src").trim()
             if (m3uLink.isEmpty()) {
-                val m3u8Regex = Regex("""["'](https?://[^"']+\.m3u8[^"']*)["']""")
-                m3uLink = m3u8Regex.find(htmlContent)?.groupValues?.get(1) ?: ""
+                m3uLink = Regex("""https?://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*\.(?:m3u8|mp4)[-a-zA-Z0-9+&@#/%=~_|]*""")
+                    .find(htmlContent)?.value ?: ""
             }
 
             if (m3uLink.isNotEmpty()) {
                 generateM3u8(name, m3uLink, domain).forEach(callback)
             }
 
-            // Ambil Subtitle Indonesia / Internasional jika tersedia
+            // Ekstraksi Subtitle Internal Majorplay
             val scripts = document.selectFirst("script:containsData(subtitles)")?.data() ?: return
-            val subRegex = Regex("""\\"label\\":\\"([^\\"]*?)\\"[^}]*?\\"path\\":\\"([^\\"]*?)\\"""")
+            val subRegex = Regex("""\\"label\\":\\"([^\\"]*?)\\"[^}]*?\\"path\\":\\"([^\\"]*?)\\\"""")
 
             subRegex.findAll(scripts).forEach { match ->
                 val label = match.groupValues[1]
