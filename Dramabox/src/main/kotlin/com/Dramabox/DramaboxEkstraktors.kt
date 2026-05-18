@@ -32,14 +32,17 @@ object MasterLinkGenerator {
         }
     }
 
+    // FIX #3: Default return changed from hardcoded 480 to Qualities.Unknown.value.
+    // If quality cannot be detected from the URL, the player should decide — not us.
     fun detectQualityFromUrl(url: String): Int {
         val urlLower = url.lowercase()
         return when {
-            urlLower.contains("1080") -> 1080
-            urlLower.contains("720") -> 720
-            urlLower.contains("480") -> 480
-            urlLower.contains("360") -> 360
-            else -> 480
+            urlLower.contains("2160") || urlLower.contains("4k") -> Qualities.P2160.value
+            urlLower.contains("1080") -> Qualities.P1080.value
+            urlLower.contains("720") -> Qualities.P720.value
+            urlLower.contains("480") -> Qualities.P480.value
+            urlLower.contains("360") -> Qualities.P360.value
+            else -> Qualities.Unknown.value
         }
     }
 }
@@ -62,12 +65,18 @@ suspend fun loadExtractorWithFallback(
 
     try {
         if (loadExtractor(url, referer, subtitleCallback, trackedCallback)) return true
-    } catch (_: Exception) {}
+    } catch (e: Exception) {
+        logError("DramaboxEkstraktors", "loadExtractor failed for url=$url", e)
+    }
 
     // Step 2: Try local extractors (Dramabox currently has none)
-    val urlDomain = url.removePrefix("http://").removePrefix("https://").split("/").first().lowercase()
+    val urlDomain = url.removePrefix("http://").removePrefix("https://")
+        .split("/").first().lowercase()
     val matchingExtractors = DramaboxEkstraktors.list.filter { extractor ->
-        urlDomain.contains(extractor.mainUrl.removePrefix("http://").removePrefix("https://").split("/").first().lowercase())
+        urlDomain.contains(
+            extractor.mainUrl.removePrefix("http://").removePrefix("https://")
+                .split("/").first().lowercase()
+        )
     }
 
     if (matchingExtractors.isEmpty()) return deliveredLinks > 0
@@ -79,7 +88,9 @@ suspend fun loadExtractorWithFallback(
                 semaphore.withPermit {
                     try {
                         extractor.getUrl(url, referer, subtitleCallback, trackedCallback)
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {
+                        logError("DramaboxEkstraktors", "Extractor ${extractor.name} failed for url=$url", e)
+                    }
                 }
             }
         }
