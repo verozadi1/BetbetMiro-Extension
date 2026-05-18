@@ -8,6 +8,7 @@ import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
+import com.lagradost.cloudstream3.utils.AppUtils
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
 
@@ -31,7 +32,7 @@ class Filmapik : MainAPI() {
         val url = "$mainUrl/${request.data.format(page)}"
         val document = app.get(url).document
         val items = document.select("div.items.normal article.item").mapNotNull { it.toSearchResult() }
-        return newHomePageResponse(request.name, items)
+        return newHomePageResponse(request.name, items, hasNext = true)
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
@@ -129,70 +130,44 @@ class Filmapik : MainAPI() {
         return newMovieSearchResponse(title, href, TvType.Movie) { this.posterUrl = poster }
     }
 
-    override suspend fun load(url: String): LoadResponse {
-    val document = app.get(url).document
-    val title = document.selectFirst(
-    "h1[itemprop=name], .sheader h1, .sheader h2"
-)?.text()
-    ?.replace(Regex("(?i)^nonton\\s+film\\s+"), "")
-    ?.replace(Regex("(?i)subtitle\\s+indonesia.*$"), "")
-    ?.trim()
-    ?: document.selectFirst("#info h2")?.text()
-        ?.replace(Regex("(?i)^nonton\\s+film\\s+"), "")
-        ?.replace(Regex("(?i)subtitle\\s+indonesia.*$"), "")
-        ?.trim()
-    ?: ""
-    val poster = document.selectFirst(".sheader .poster img")
-        ?.attr("src")
-        ?.let { fixUrl(it) }
-    val tags = document.select("span.sgeneros a")
-    .map { it.text().trim() }
-    val actors = document.select(".info-more span.tagline")
-    .firstOrNull {
-        it.text().contains("Actors", true) ||
-        it.text().contains("Stars", true)
-    }
-    ?.select("a")
-    ?.map { it.text() }
-    ?: emptyList()
-    val description = document.selectFirst(
-        "div[itemprop=description], .wp-content, .entry-content, .desc, .entry"
-    )?.text()?.trim()
-        ?: "Tidak ada deskripsi."
-    val year = document.selectFirst("#info .info-more .country a")
-        ?.text()
-        ?.toIntOrNull()
-    val rating = document.selectFirst("#repimdb strong")
-        ?.text()
-        ?.toFloatOrNull()
-    val recommendations = document
-        .select("#single_relacionados article")
-        .mapNotNull { it.toRecommendResult() }
-    val duration = document.selectFirst("span.runtime")
-    ?.text()
-    ?.let { Regex("(\\d+)").find(it)?.value }
-    ?.toIntOrNull()
+    override suspend fun load(url: String): LoadResponse? {
+        val document = app.get(url).document
+        val title = document.selectFirst("h1[itemprop=name], .sheader h1, .sheader h2")?.text()
+            ?.replace(Regex("(?i)^nonton\\s+film\\s+"), "")
+            ?.replace(Regex("(?i)subtitle\\s+indonesia.*$"), "")
+            ?.trim()
+            ?: document.selectFirst("#info h2")?.text()
+                ?.replace(Regex("(?i)^nonton\\s+film\\s+"), "")
+                ?.replace(Regex("(?i)subtitle\\s+indonesia.*$"), "")
+                ?.trim()
+            ?: ""
+        val poster = document.selectFirst(".sheader .poster img")
+            ?.attr("src")
+            ?.let { fixUrl(it) }
+        val tags = document.select("span.sgeneros a").map { it.text().trim() }
+        val actors = document.select(".info-more span.tagline")
+            .firstOrNull { it.text().contains("Actors", true) || it.text().contains("Stars", true) }
+            ?.select("a")
+            ?.map { it.text() }
+            ?: emptyList()
+        val description = document.selectFirst("div[itemprop=description], .wp-content, .entry-content, .desc, .entry")?.text()?.trim()
+            ?: "Tidak ada deskripsi."
+        val year = document.selectFirst("#info .info-more .country a")?.text()?.toIntOrNull()
+        val rating = document.selectFirst("#repimdb strong")?.text()?.toFloatOrNull()
+        val recommendations = document.select("#single_relacionados article").mapNotNull { it.toRecommendResult() }
+        val duration = document.selectFirst("span.runtime")?.text()?.let { Regex("(\\d+)").find(it)?.value }?.toIntOrNull()
 
-    val seasonBlocks = document.select("#seasons .se-c")
+        val seasonBlocks = document.select("#seasons .se-c")
 
-    if (seasonBlocks.isNotEmpty()) {
-        val episodes = mutableListOf<Episode>()
+        if (seasonBlocks.isNotEmpty()) {
+            val episodes = mutableListOf<Episode>()
 
-        seasonBlocks.forEach { block ->
-            val seasonNum = block
-                .selectFirst(".se-q .se-t")
-                ?.text()
-                ?.filter { it.isDigit() }
-                ?.toIntOrNull()
-                ?: 1
+            seasonBlocks.forEach { block ->
+                val seasonNum = block.selectFirst(".se-q .se-t")?.text()?.filter { it.isDigit() }?.toIntOrNull() ?: 1
 
-            block.select(".se-a ul.episodios li a")
-                .forEachIndexed { index, ep ->
-
+                block.select(".se-a ul.episodios li a").forEachIndexed { index, ep ->
                     val epUrl = fixUrl(ep.attr("href"))
-                    val epName = ep.text().ifBlank {
-                        "Episode ${index + 1}"
-                    }
+                    val epName = ep.text().ifBlank { "Episode ${index + 1}" }
 
                     episodes.add(
                         newEpisode(epUrl) {
@@ -202,14 +177,23 @@ class Filmapik : MainAPI() {
                         }
                     )
                 }
+            }
+
+            return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+                this.posterUrl = poster
+                this.year = year
+                addActors(actors)
+                this.plot = description
+                this.tags = tags
+                this.duration = duration ?: 0
+                this.recommendations = recommendations
+                this.score = Score.from10(rating)
+            }
         }
 
-        return newTvSeriesLoadResponse(
-            title,
-            url,
-            TvType.TvSeries,
-            episodes
-        ) {
+        val playUrl = document.selectFirst("#clickfakeplayer, .fakeplayer a")?.attr("href")?.let { fixUrl(it) }
+
+        return newMovieLoadResponse(title, playUrl ?: url, TvType.Movie, playUrl ?: url) {
             this.posterUrl = poster
             this.year = year
             addActors(actors)
@@ -221,110 +205,65 @@ class Filmapik : MainAPI() {
         }
     }
 
-    val playUrl = document
-        .selectFirst("#clickfakeplayer, .fakeplayer a")
-        ?.attr("href")
-        ?.let { fixUrl(it) }
-
-    return newMovieLoadResponse(
-    title,
-    playUrl ?: url,
-    TvType.Movie,
-    playUrl ?: url   
-) {
-    this.posterUrl = poster
-    this.year = year
-    addActors(actors)
-    this.plot = description
-    this.tags = tags
-    this.duration = duration ?: 0
-    this.recommendations = recommendations
-    this.score = Score.from10(rating)
-}
-}
-
-
     override suspend fun loadLinks(
-    data: String,
-    isCasting: Boolean,
-    subtitleCallback: (SubtitleFile) -> Unit,
-    callback: (ExtractorLink) -> Unit
-): Boolean {
+        data: String,
+        isCaster: Boolean,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val doc = app.get(data).document
+        val links = mutableListOf<String>()
 
-    val doc = app.get(data).document
-
-    val links = mutableListOf<String>()
-
-  
-    doc.select("div.pframe iframe[src]").forEach { iframe ->
-        val iframeUrl = fixUrl(iframe.attr("src"))
-        loadExtractor(iframeUrl, data, subtitleCallback, callback)
-    }
-    doc.select("li.dooplay_player_option[data-url]").forEach { el ->
-        val serverUrl = el.attr("data-url").trim()
-        if (serverUrl.isNotEmpty()) {
-            loadExtractor(serverUrl, data, subtitleCallback, callback)
+        doc.select("div.pframe iframe[src]").forEach { iframe ->
+            val iframeUrl = fixUrl(iframe.attr("src"))
+            loadExtractor(iframeUrl, data, subtitleCallback, callback)
         }
-    }
-
-    doc.select("div#download a.myButton[href]").forEach { a ->
-        val href = a.attr("href").trim()
-        if (href.isNotEmpty()) {
-            links.add(fixUrl(href))
-        }
-    }
-
-   
-    for (raw in links) {
-        val resolved = resolveIframe(raw)
-        loadExtractor(resolved, data, subtitleCallback, callback)
-    }
-
-    return true
-}
-
-
-
-private suspend fun resolveIframe(url: String): String {
-
-    val res = app.get(url, allowRedirects = true)
-
-    val doc = res.document
-
-    doc.selectFirst("iframe[src]")?.attr("src")?.trim()?.let {
-
-        if (it.startsWith("http")) return it
-
-    }
-
-    doc.select("meta[http-equiv=refresh]").forEach { meta ->
-
-        meta.attr("content")?.substringAfter("URL=")?.trim()?.let { refreshUrl ->
-
-            if (refreshUrl.startsWith("http")) return resolveIframe(refreshUrl)
-
+        doc.select("li.dooplay_player_option[data-url]").forEach { el ->
+            val serverUrl = el.attr("data-url").trim()
+            if (serverUrl.isNotEmpty()) {
+                loadExtractor(serverUrl, data, subtitleCallback, callback)
+            }
         }
 
+        doc.select("div#download a.myButton[href]").forEach { a ->
+            val href = a.attr("href").trim()
+            if (href.isNotEmpty()) {
+                links.add(fixUrl(href))
+            }
+        }
+
+        for (raw in links) {
+            val resolved = resolveIframe(raw)
+            loadExtractor(resolved, data, subtitleCallback, callback)
+        }
+
+        return true
     }
 
-    val scripts = doc.select("script").html()
+    private suspend fun resolveIframe(url: String): String {
+        val res = app.get(url, allowRedirects = true)
+        val doc = res.document
 
-    val regexJs = Regex("""location\.href\s*=\s*["'](.*?)["']""")
+        doc.selectFirst("iframe[src]")?.attr("src")?.trim()?.let {
+            if (it.startsWith("http")) return it
+        }
 
-    val match = regexJs.find(scripts)
+        doc.select("meta[http-equiv=refresh]").forEach { meta ->
+            meta.attr("content")?.substringAfter("URL=")?.trim()?.let { refreshUrl ->
+                if (refreshUrl.startsWith("http")) return resolveIframe(refreshUrl)
+            }
+        }
 
-    if (match != null) {
+        val scripts = doc.select("script").html()
+        val regexJs = Regex("""location\.href\s*=\s*["'](.*?)["']""")
+        val match = regexJs.find(scripts)
+        if (match != null) {
+            val jsUrl = match.groupValues[1]
+            if (jsUrl.startsWith("http")) return resolveIframe(jsUrl)
+        }
 
-        val jsUrl = match.groupValues[1]
-
-        if (jsUrl.startsWith("http")) return resolveIframe(jsUrl)
-
+        return res.url
     }
-
-    return res.url
-
-}
-
 
     private fun String?.fixImageQuality(): String? {
         if (this == null) return null

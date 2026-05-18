@@ -8,10 +8,6 @@ import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.extractors.VidStack
 import com.lagradost.cloudstream3.utils.*
-import com.lagradost.cloudstream3.utils.Qualities
-import com.lagradost.cloudstream3.utils.ExtractorLinkType
-
-
 
 class Filmapikstrp2p : VidStack() {
     override var name = "Filmapikstrp2p"
@@ -32,7 +28,8 @@ class BuzzServer : ExtractorApi() {
     ) {
         try {
             val qualityText = app.get(url).documentLarge.selectFirst("div.max-w-2xl > span")?.text()
-            val quality = getQualityFromName(qualityText)
+            // FIX SAFETY: Panggil eksplisit lewat AppUtils untuk mencegah krisis receiver type mismatch
+            val quality = AppUtils.getQualityFromName(qualityText)
             val response = app.get("$url/download", referer = url, allowRedirects = false)
             val redirectUrl = response.headers["hx-redirect"] ?: ""
 
@@ -54,4 +51,3 @@ class BuzzServer : ExtractorApi() {
         }
     }
 }
-
