@@ -11,7 +11,7 @@ import java.net.URI
 class Gomunime : MainAPI() {
 
     override var mainUrl = "https://gomunime.top"
-    override var name = "Gomunime"
+    override var name = "Gomunime Lagi Broken side server"
     override val hasMainPage = true
     override val hasQuickSearch = true
     override val hasDownloadSupport = true
