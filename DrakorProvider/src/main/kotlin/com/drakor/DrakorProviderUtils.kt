@@ -106,7 +106,6 @@ suspend fun tmdbToAnimeId(title: String?, year: Int?, season: String?, type: TvT
     val res = app.post(anilistAPI, requestBody = data)
         .parsedSafe<AniSearch>()?.data?.Page?.media?.firstOrNull()
     return AniIds(res?.id, res?.idMal)
-
 }
 
 fun safeBase64Decode(input: String): String {
@@ -489,7 +488,6 @@ object VidsrcHelper {
         val encrypted = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
         return base64UrlEncode(encrypted)
     }
-
 }
 
 fun generateHashedString(): String {
@@ -548,7 +546,7 @@ fun cinemaOSDecryptResponse(e: CinemaOSReponseData?): Any {
     val gcmSpec = GCMParameterSpec(128, ivBytes)
     cipher.init(Cipher.DECRYPT_MODE, key, gcmSpec)
     val decryptedBytes = cipher.doFinal(encryptedBytes + authTagBytes)
-    
+
     return String(decryptedBytes)
 }
 
