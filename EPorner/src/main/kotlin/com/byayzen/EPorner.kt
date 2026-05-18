@@ -3,7 +3,6 @@ package com.byayzen
 import com.lagradost.api.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
-import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.network.WebViewResolver
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
@@ -25,7 +24,6 @@ class EPorner : MainAPI() {
         "$mainUrl/tag/riding/" to "Riding",
         "$mainUrl/tag/turkish/" to "Turkish",
         "$mainUrl/cat/housewives/" to "Housewives"
-
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -41,15 +39,18 @@ class EPorner : MainAPI() {
         return newSearchResponseList(results, true)
     }
 
+    // FIX #1: quickSearch was calling search(query) with only 1 argument, but search()
+    // requires 2 parameters (query: String, page: Int). This caused a compile error.
+    // Fixed by passing page=1 explicitly.
+    override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query, 1).searchResponses
+
     private fun Element.toSearchResult(): SearchResponse? {
         val titleElement = this.selectFirst("p.mbtit a") ?: return null
         val img = this.selectFirst("div.mbimg img")
-
         val poster = fixUrlNull(
             img?.attr("data-src")?.takeIf { it.isNotEmpty() && !it.startsWith("data:") }
                 ?: img?.attr("src")
         )
-
         return newMovieSearchResponse(
             titleElement.text(),
             fixUrl(titleElement.attr("href")),
@@ -58,9 +59,6 @@ class EPorner : MainAPI() {
             this.posterUrl = poster
         }
     }
-
-
-    override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
         val document = app.get(url).document
@@ -71,12 +69,10 @@ class EPorner : MainAPI() {
         )
         val tags = document.select("div#video-info-tags ul li.vit-category a").map { it.text() }
         val year = document.selectFirst("span.C a")?.text()?.trim()?.toIntOrNull()
-        val duration = document.selectFirst("span.vid-length")?.text()?.replace("min", "")?.trim()
-            ?.toIntOrNull()
-        val description =
-            document.selectFirst("meta[property=og:description]")?.attr("content")?.trim()
-        val recommendations =
-            document.select("div#relateddiv div.mb").mapNotNull { it.toRecommendationResult() }
+        val duration = document.selectFirst("span.vid-length")?.text()
+            ?.replace("min", "")?.trim()?.toIntOrNull()
+        val description = document.selectFirst("meta[property=og:description]")?.attr("content")?.trim()
+        val recommendations = document.select("div#relateddiv div.mb").mapNotNull { it.toRecommendationResult() }
         val actors = document.select("span.valor a").map { Actor(it.text()) }
 
         return newMovieLoadResponse(title, url, TvType.NSFW, url) {
@@ -93,8 +89,8 @@ class EPorner : MainAPI() {
     private fun Element.toRecommendationResult(): SearchResponse? {
         val titleElement = this.selectFirst("p.mbtit a") ?: return null
         val posterUrl = fixUrlNull(
-            this.selectFirst("div.mbimg img")?.attr("data-src") ?: this.selectFirst("div.mbimg img")
-                ?.attr("src")
+            this.selectFirst("div.mbimg img")?.attr("data-src")
+                ?: this.selectFirst("div.mbimg img")?.attr("src")
         )
         return newMovieSearchResponse(
             titleElement.text(),
@@ -104,7 +100,6 @@ class EPorner : MainAPI() {
             this.posterUrl = posterUrl
         }
     }
-
 
     override suspend fun loadLinks(
         data: String,
@@ -121,6 +116,8 @@ class EPorner : MainAPI() {
             useOkhttp = true
         )
 
+        // FIX #3: Replaced empty catch block with proper logging.
+        // Silent catch means the user sees a blank player with no indication of what went wrong.
         try {
             val capturedUrl = app.get(url, interceptor = resolver).url
             if (capturedUrl.contains("/xhr/video/")) {
@@ -132,8 +129,8 @@ class EPorner : MainAPI() {
                         if (!videoUrl.contains("/dload/")) {
                             callback.invoke(
                                 newExtractorLink(
-                                    name = "$name",
                                     source = name,
+                                    name = name,
                                     url = videoUrl,
                                     type = ExtractorLinkType.VIDEO
                                 ) {
@@ -146,8 +143,9 @@ class EPorner : MainAPI() {
                     }
             }
         } catch (e: Exception) {
+            Log.e("EPorner", "loadLinks failed for url=$url: ${e.message}")
         }
 
         return videoFound
     }
-    }
+}
