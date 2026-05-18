@@ -470,7 +470,7 @@ data class DrakorItem(
     @JsonProperty("title") val title: String? = null,
     @JsonProperty("slug") val slug: String? = null,
     @JsonProperty("image") val image: String? = null,
-    @JsonProperty("year") val year: String? = null 
+    @JsonProperty("year") val year: String? = null
 )
 
 data class RiveStreamSource(
