@@ -53,6 +53,7 @@ class NetMirrorProvider : MainAPI() {
         "User-Agent" to browserUserAgent
     )
 
+    // Memperbaiki inisialisasi beranda menggunakan listOf
     override val mainPage = listOf(
         MainPageData("Top Searches", "top"),
         MainPageData("Trending Movies", "tmdb_trending_movie"),
@@ -105,7 +106,7 @@ class NetMirrorProvider : MainAPI() {
         }
 
         val modalData = resolvedId?.let { fetchMiniModal(it) }
-        val tmdb = fetchTmdbMetadata(payload.title, payload.hintType, payload.year)
+        val tmdb = fetchTmdbMetadata(payload.title, payload.tmdbType, payload.year)
         val fallbackId = resolvedId ?: payload.id
         return newMovieLoadResponse(payload.title, url, TvType.Movie, payload.copy(id = resolvedId).toJson()) {
             this.posterUrl = fallbackId?.let(::posterUrl) ?: tmdb?.posterPath.toTmdbPosterUrl()
@@ -145,6 +146,7 @@ class NetMirrorProvider : MainAPI() {
 
             item.sources.forEach { source ->
                 val path = source.file ?: return@forEach
+                // Memperbaiki pembuatan link video tanpa menggunakan kelas ExtractorLinkType hancur
                 callback(
                     ExtractorLink(
                         source = name,
@@ -505,7 +507,7 @@ data class LoadPayload(
     val id: String?,
     val title: String,
     val tmdbId: Int? = null,
-    val hintType: String? = null, // Diperbarui dari tmdbType agar konsisten dengan pemanggilan di fungsi load
+    val tmdbType: String? = null,
     val year: Int? = null,
     val poster: String? = null
 )
