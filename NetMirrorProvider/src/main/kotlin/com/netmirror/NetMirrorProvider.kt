@@ -11,11 +11,12 @@ import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageRequest
-import com.lagradost.cloudstream3.MainPageData
+import com.lagradost.cloudstream3.Score
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.app
+import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
@@ -26,7 +27,9 @@ import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
+import com.lagradost.cloudstream3.utils.newExtractorLink
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.net.URLEncoder
 
@@ -35,7 +38,7 @@ class NetMirrorProvider : MainAPI() {
     private val streamUrl = "https://net52.cc"
     private val tmdbApi = "https://api.themoviedb.org/3"
     private val tmdbApiKey = "b030404650f279792a8d3287232358e3"
-    override var name = "NetMirror😴😴"
+    override var name = "NetMirror"
     override var lang = "id"
     override val hasMainPage = true
     override val hasQuickSearch = true
@@ -53,13 +56,12 @@ class NetMirrorProvider : MainAPI() {
         "User-Agent" to browserUserAgent
     )
 
-    // Memperbaiki inisialisasi beranda menggunakan listOf
-    override val mainPage = listOf(
-        MainPageData("Top Searches", "top"),
-        MainPageData("Trending Movies", "tmdb_trending_movie"),
-        MainPageData("Trending Series", "tmdb_trending_tv"),
-        MainPageData("Popular Movies", "tmdb_popular_movie"),
-        MainPageData("Popular Series", "tmdb_popular_tv")
+    override val mainPage = mainPageOf(
+        "top" to "Top Searches",
+        "tmdb_trending_movie" to "Trending Movies",
+        "tmdb_trending_tv" to "Trending Series",
+        "tmdb_popular_movie" to "Popular Movies",
+        "tmdb_popular_tv" to "Popular Series"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -116,7 +118,7 @@ class NetMirrorProvider : MainAPI() {
                 ?: tmdb?.genres?.mapNotNull { it.name?.trim() }?.filter { it.isNotBlank() }
             this.contentRating = modalData?.ua
             this.year = tmdb?.yearOrNull() ?: payload.year
-            this.rating = modalData?.match.toRatingOrNull() ?: tmdb?.voteAverage?.let { (it * 100).toInt() }
+            (modalData?.match.toScoreOrNull() ?: tmdb?.voteAverage?.let { Score.from10(it) })?.let { this.score = it }
         }
     }
 
@@ -146,23 +148,23 @@ class NetMirrorProvider : MainAPI() {
 
             item.sources.forEach { source ->
                 val path = source.file ?: return@forEach
-                // Memperbaiki pembuatan link video tanpa menggunakan kelas ExtractorLinkType hancur
                 callback(
-                    ExtractorLink(
-                        source = name,
-                        name = source.label ?: "Stream",
-                        url = path.toAbsoluteStreamUrl(),
-                        referer = "$streamUrl/",
-                        quality = source.label.toNetMirrorQuality(),
-                        isM3u8 = true,
-                        headers = mapOf(
+                    newExtractorLink(
+                        name,
+                        source.label ?: "Stream",
+                        path.toAbsoluteStreamUrl(),
+                        ExtractorLinkType.M3U8
+                    ) {
+                        this.referer = "$streamUrl/"
+                        this.quality = source.label.toNetMirrorQuality()
+                        this.headers = mapOf(
                             "Referer" to "$streamUrl/",
                             "User-Agent" to exoPlayerUserAgent,
                             "Accept" to "*/*",
                             "Accept-Encoding" to "identity",
                             "Connection" to "keep-alive"
                         )
-                    )
+                    }
                 )
             }
         }
@@ -178,7 +180,7 @@ class NetMirrorProvider : MainAPI() {
         val resolvedId = requireNotNull(payload.id) { "NetMirror id missing" }
         val title = postData.title ?: payload.title
         val plot = postData.desc
-        val rating = postData.match.toRatingOrNull()
+        val score = postData.match.toScoreOrNull()
         val tags = postData.genre?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() }
         val cast = postData.cast?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() }
             ?.map { ActorData(Actor(it)) }
@@ -200,7 +202,7 @@ class NetMirrorProvider : MainAPI() {
                 this.actors = cast
                 this.contentRating = contentRating
                 this.duration = duration
-                this.rating = rating
+                score?.let { this.score = it }
             }
         }
 
@@ -237,7 +239,7 @@ class NetMirrorProvider : MainAPI() {
             this.actors = cast
             this.contentRating = contentRating
             this.duration = duration
-            this.rating = rating
+            score?.let { this.score = it }
         }
     }
 
@@ -299,7 +301,7 @@ class NetMirrorProvider : MainAPI() {
                     type = type,
                     poster = item.posterPath.toTmdbPosterUrl(),
                     year = item.yearOrNull(),
-                    rating = item.voteAverage?.let { (it * 100).toInt() }
+                    score = item.voteAverage?.let { Score.from10(it) }
                 )
             }
     }
@@ -351,7 +353,7 @@ class NetMirrorProvider : MainAPI() {
                 headers = ajaxHeaders,
                 referer = "$mainUrl/"
             ).parsedSafe<Array<PlaylistItem>>()?.toList()
-            if (!validated.isNullOrEmpty()) return validated
+            if (!validated.isNullOrEmpty() && isPlayablePlaylist(validated)) return validated
         }
 
         val direct = app.get(
@@ -360,7 +362,7 @@ class NetMirrorProvider : MainAPI() {
             referer = "$mainUrl/"
         ).parsedSafe<Array<PlaylistItem>>()?.toList()
 
-        return direct?.takeIf { it.isNotEmpty() }
+        return direct?.takeIf { it.isNotEmpty() && isPlayablePlaylist(it) }
     }
 
     private suspend fun fetchStageTwoToken(id: String, token: String): String? {
@@ -414,15 +416,62 @@ class NetMirrorProvider : MainAPI() {
         return null
     }
 
+    private suspend fun isPlayablePlaylist(playlist: List<PlaylistItem>): Boolean {
+        val sourceUrl = playlist.firstOrNull()?.sources?.firstOrNull()?.file?.toAbsoluteStreamUrl() ?: return false
+        val master = runCatching {
+            app.get(
+                sourceUrl,
+                referer = "$streamUrl/",
+                headers = mapOf("Referer" to "$streamUrl/", "User-Agent" to exoPlayerUserAgent)
+            ).text
+        }.getOrNull() ?: return false
+        if (!master.contains("#EXTM3U")) return false
+
+        val variantUrl = master.lineSequence()
+            .map { it.trim() }
+            .firstOrNull { it.startsWith("http", true) && it.contains(".m3u8", true) }
+            ?: return false
+
+        val variant = runCatching {
+            app.get(
+                variantUrl,
+                referer = "$streamUrl/",
+                headers = mapOf("Referer" to "$streamUrl/", "User-Agent" to exoPlayerUserAgent)
+            ).text
+        }.getOrNull() ?: return false
+        if (!variant.contains("#EXTM3U")) return false
+
+        val firstSegment = variant.lineSequence()
+            .map { it.trim() }
+            .firstOrNull { it.isNotBlank() && !it.startsWith("#") }
+            ?: return false
+        val segmentUrl = resolveRelativeUrl(variantUrl, firstSegment) ?: return false
+
+        return runCatching {
+            app.get(
+                segmentUrl,
+                referer = "$streamUrl/",
+                headers = mapOf("Referer" to "$streamUrl/", "User-Agent" to exoPlayerUserAgent)
+            )
+            true
+        }.getOrDefault(false)
+    }
+
+    private fun resolveRelativeUrl(baseUrl: String, relative: String): String? {
+        if (relative.startsWith("http://") || relative.startsWith("https://")) return relative
+        val httpUrl = baseUrl.toHttpUrlOrNull() ?: return null
+        return httpUrl.resolve(relative)?.toString()
+    }
+
     private fun posterUrl(id: String): String = "https://imgcdn.kim/poster/v/$id.jpg"
 
     private fun backgroundPosterUrl(id: String): String = "https://imgcdn.kim/poster/h/$id.jpg"
 
     private fun episodePosterUrl(id: String): String = "https://imgcdn.kim/epimg/150/$id.jpg"
 
-    private fun String?.toRatingOrNull(): Int? {
+    private fun String?.toScoreOrNull(): Score? {
         val percent = this?.substringBefore("%")?.trim()?.toDoubleOrNull() ?: return null
-        return (percent * 10).toInt()
+        return Score.from10(percent / 10.0)
     }
 
     private fun String?.toMinutesOrNull(): Int? {
@@ -466,19 +515,19 @@ class NetMirrorProvider : MainAPI() {
         type: TvType,
         poster: String? = null,
         year: Int? = null,
-        rating: Int? = null
+        score: Score? = null
     ): SearchResponse {
         return if (type == TvType.TvSeries) {
             newTvSeriesSearchResponse(title, payload.toJson(), type) {
                 this.posterUrl = poster
                 this.year = year
-                this.rating = rating
+                score?.let { this.score = it }
             }
         } else {
             newMovieSearchResponse(title, payload.toJson(), type) {
                 this.posterUrl = poster
                 this.year = year
-                this.rating = rating
+                score?.let { this.score = it }
             }
         }
     }
