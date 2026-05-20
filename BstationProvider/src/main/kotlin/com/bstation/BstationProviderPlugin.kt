@@ -1,11 +1,12 @@
 package com.bstation
 
-import com.lagradost.cloudstream3.plugins.BasePlugin
+import android.content.Context
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
+import com.lagradost.cloudstream3.plugins.Plugin
 
 @CloudstreamPlugin
-class BstationProviderPlugin : BasePlugin() {
-    override fun load() {
+class BstationProviderPlugin : Plugin() {
+    override fun load(context: Context) {
         registerMainAPI(BstationProvider())
     }
 }
