@@ -1,13 +1,14 @@
 version = 1
 
 cloudstream {
-    description = "Azmovies"
+    description = "AzMovies + Noxx"
     language = "id"
     authors = listOf("BetbetMiro")
 
     status = 1
     tvTypes = listOf(
         "Movie",
+        "TvSeries",
     )
 
     iconUrl =

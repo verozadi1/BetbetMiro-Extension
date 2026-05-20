@@ -33,7 +33,7 @@ import java.net.URLDecoder
 
 class Azmovies : MainAPI() {
     override var mainUrl = "https://azmovies.to"
-    override var name = "Azmovies😪"
+    override var name = "AzMovies"
     override val hasMainPage = true
     override val hasQuickSearch = true
     override var lang = "id"
@@ -41,9 +41,28 @@ class Azmovies : MainAPI() {
 
     override val mainPage =
         mainPageOf(
-            "$mainUrl/search?q=&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=newest&page=%d" to "Newest",
-            "$mainUrl/search?q=&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured&page=%d" to "Featured",
-            "$mainUrl/search?q=&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=rating&page=%d" to "Top Rating",
+            "$mainUrl/search?q=&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=newest&page=%d" to "Terbaru",
+            "$mainUrl/search?q=&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured&page=%d" to "Unggulan",
+            "$mainUrl/search?q=&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=rating&page=%d" to "Rating Tertinggi",
+            "$mainUrl/search?q=&genre=Action&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured&page=%d" to "Aksi",
+            "$mainUrl/search?q=&genre=Adventure&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured&page=%d" to "Petualangan",
+            "$mainUrl/search?q=&genre=Animation&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured&page=%d" to "Animasi",
+            "$mainUrl/search?q=&genre=Comedy&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured&page=%d" to "Komedi",
+            "$mainUrl/search?q=&genre=Crime&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured&page=%d" to "Kriminal",
+            "$mainUrl/search?q=&genre=Documentary&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured&page=%d" to "Dokumenter",
+            "$mainUrl/search?q=&genre=Drama&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured&page=%d" to "Drama",
+            "$mainUrl/search?q=&genre=Family&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured&page=%d" to "Keluarga",
+            "$mainUrl/search?q=&genre=Fantasy&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured&page=%d" to "Fantasi",
+            "$mainUrl/search?q=&genre=History&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured&page=%d" to "Sejarah",
+            "$mainUrl/search?q=&genre=Horror&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured&page=%d" to "Horor",
+            "$mainUrl/search?q=&genre=Music&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured&page=%d" to "Musik",
+            "$mainUrl/search?q=&genre=Mystery&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured&page=%d" to "Misteri",
+            "$mainUrl/search?q=&genre=Romance&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured&page=%d" to "Romantis",
+            "$mainUrl/search?q=&genre=Science%20Fiction&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured&page=%d" to "Fiksi Ilmiah",
+            "$mainUrl/search?q=&genre=TV%20Movie&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured&page=%d" to "Film TV",
+            "$mainUrl/search?q=&genre=Thriller&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured&page=%d" to "Thriller",
+            "$mainUrl/search?q=&genre=War&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured&page=%d" to "Perang",
+            "$mainUrl/search?q=&genre=Western&year_from=0&year_to=0&rating_from=0&rating_to=10&sort=featured&page=%d" to "Western",
         )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -70,7 +89,9 @@ class Azmovies : MainAPI() {
         val duration = document.select("div.movie-meta span.has-icon").firstOrNull()?.text()?.toMinutes()
         val ratingText = document.selectFirst("span.movie-rating")?.text()?.trim()
         val plot = document.selectFirst("div.movie-overview p")?.text()?.trim()
-        val tags = document.select("div.movie-genres a").map { it.text().trim() }.filter { it.isNotBlank() }
+        val tags = document.select("div.movie-genres a")
+            .map { translateGenre(it.text().trim()) }
+            .filter { it.isNotBlank() }
         val actors =
             document.select("div.movie-cast .cast-card").mapNotNull { card ->
                 val actorName = card.selectFirst("strong")?.text()?.trim() ?: return@mapNotNull null
@@ -159,6 +180,25 @@ class Azmovies : MainAPI() {
                     },
                 )
             }
+        }
+
+        if (servers.isEmpty()) {
+            document
+                .select("iframe[src], iframe[data-src], iframe[data-litespeed-src], a[href*='vidsrc'], a[href*='myvidplay'], a[href*='hqq'], a[href*='byse']")
+                .mapNotNull { element ->
+                    when {
+                        element.hasAttr("data-litespeed-src") -> element.attr("data-litespeed-src")
+                        element.hasAttr("data-src") -> element.attr("data-src")
+                        element.hasAttr("src") -> element.attr("src")
+                        else -> element.attr("href")
+                    }.trim().takeIf { it.isNotBlank() }
+                }
+                .distinct()
+                .forEach { raw ->
+                    runCatching {
+                        loadExtractor(raw.toAbsoluteUrl() ?: raw, "$mainUrl/", subtitleCallback, callback)
+                    }
+                }
         }
 
         return true
@@ -256,6 +296,31 @@ class Azmovies : MainAPI() {
 
     private fun String.decodeJsonUrl(): String {
         return replace("\\u0026", "&").replace("\\/", "/")
+    }
+
+    private fun translateGenre(name: String): String {
+        return when (name.trim().lowercase()) {
+            "action" -> "Aksi"
+            "adventure" -> "Petualangan"
+            "animation" -> "Animasi"
+            "comedy" -> "Komedi"
+            "crime" -> "Kriminal"
+            "documentary" -> "Dokumenter"
+            "drama" -> "Drama"
+            "family" -> "Keluarga"
+            "fantasy" -> "Fantasi"
+            "history" -> "Sejarah"
+            "horror" -> "Horor"
+            "music" -> "Musik"
+            "mystery" -> "Misteri"
+            "romance" -> "Romantis"
+            "science fiction", "sci-fi" -> "Fiksi Ilmiah"
+            "tv movie" -> "Film TV"
+            "thriller" -> "Thriller"
+            "war" -> "Perang"
+            "western" -> "Western"
+            else -> name.trim()
+        }
     }
 
     private suspend fun request(url: String): NiceResponse {
@@ -387,7 +452,7 @@ class Azmovies : MainAPI() {
         return URI(url).let { "${it.scheme}://${it.host}" }
     }
 
-private data class ServerButton(
+    private data class ServerButton(
     val url: String,
     val server: String,
     val quality: String,

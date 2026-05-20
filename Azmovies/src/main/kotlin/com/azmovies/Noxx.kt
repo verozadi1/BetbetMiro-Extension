@@ -27,17 +27,34 @@ import java.net.URLDecoder
 
 class Noxx : MainAPI() {
     override var mainUrl = "https://noxx.to"
-    override var name = "Noxx😅"
+    override var name = "Noxx"
     override val hasMainPage = true
     override val hasQuickSearch = true
-    override var lang = "en"
+    override var lang = "id"
     override val supportedTypes = setOf(TvType.TvSeries)
 
     override val mainPage =
         mainPageOf(
-            "" to "Latest",
-            "s=rating" to "Top Rating",
+            "" to "Serial Terbaru",
+            "s=rating" to "Rating Tertinggi",
             "s=alphabetical" to "A-Z",
+            "g=Action" to "Aksi",
+            "g=Adventure" to "Petualangan",
+            "g=Animation" to "Animasi",
+            "g=Comedy" to "Komedi",
+            "g=Crime" to "Kriminal",
+            "g=Documentary" to "Dokumenter",
+            "g=Drama" to "Drama",
+            "g=Family" to "Keluarga",
+            "g=Kids" to "Anak-anak",
+            "g=Mystery" to "Misteri",
+            "g=News" to "Berita",
+            "g=Reality" to "Reality",
+            "g=Sci-Fi%20%26%20Fantasy" to "Sci-Fi & Fantasi",
+            "g=Soap" to "Soap",
+            "g=Talk" to "Talkshow",
+            "g=War%20%26%20Politics" to "Perang & Politik",
+            "g=Western" to "Western",
         )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -96,7 +113,7 @@ class Noxx : MainAPI() {
         val tags =
             document
                 .select("a[href^=\"/browse?g=\"]")
-                .map { it.text().trim() }
+                .map { translateGenre(it.text().trim()) }
                 .filter { it.isNotBlank() }
                 .distinct()
         val episodes =
@@ -155,6 +172,25 @@ class Noxx : MainAPI() {
             }.onFailure {
                 loadExtractor(rawUrl, "$mainUrl/", subtitleCallback, callback)
             }
+        }
+
+        if (buttons.isEmpty()) {
+            response.document
+                .select("iframe[src], iframe[data-src], iframe[data-litespeed-src], a[href*='vidsrc'], a[href*='myvidplay'], a[href*='hqq'], a[href*='byse']")
+                .mapNotNull { element ->
+                    when {
+                        element.hasAttr("data-litespeed-src") -> element.attr("data-litespeed-src")
+                        element.hasAttr("data-src") -> element.attr("data-src")
+                        element.hasAttr("src") -> element.attr("src")
+                        else -> element.attr("href")
+                    }.trim().takeIf { it.isNotBlank() }
+                }
+                .distinct()
+                .forEach { raw ->
+                    runCatching {
+                        loadExtractor(raw.toAbsoluteUrl() ?: raw, "$mainUrl/", subtitleCallback, callback)
+                    }
+                }
         }
 
         return buttons.isNotEmpty()
@@ -223,6 +259,29 @@ class Noxx : MainAPI() {
         if (generated.isEmpty()) return false
         generated.forEach(callback)
         return true
+    }
+
+    private fun translateGenre(name: String): String {
+        return when (name.trim().lowercase()) {
+            "action" -> "Aksi"
+            "adventure" -> "Petualangan"
+            "animation" -> "Animasi"
+            "comedy" -> "Komedi"
+            "crime" -> "Kriminal"
+            "documentary" -> "Dokumenter"
+            "drama" -> "Drama"
+            "family" -> "Keluarga"
+            "kids" -> "Anak-anak"
+            "mystery" -> "Misteri"
+            "news" -> "Berita"
+            "reality" -> "Reality"
+            "sci-fi & fantasy", "sci-fi fantasy" -> "Sci-Fi & Fantasi"
+            "soap" -> "Soap"
+            "talk" -> "Talkshow"
+            "war & politics", "war politics" -> "Perang & Politik"
+            "western" -> "Western"
+            else -> name.trim()
+        }
     }
 
     private suspend fun requestPage(url: String): NiceResponse {
