@@ -49,29 +49,13 @@ class Alqanime : MainAPI() {
         "$mainUrl/advanced-search/page/%d/?status=completed&order=update" to "Selesai Tayang",
         "$mainUrl/advanced-search/page/%d/?type[]=movie&order=update" to "Film Layar Lebar",
         "$mainUrl/popular/page/%d/" to "Popular",
-        "$mainUrl/tag/action/page/%d/" to "Action / Adventure",
-        "$mainUrl/tag/adventure/page/%d/" to "Action / Adventure",
-        "$mainUrl/tag/romance/page/%d/" to "Romance / Drama",
-        "$mainUrl/tag/drama/page/%d/" to "Romance / Drama",
-        "$mainUrl/tag/comedy/page/%d/" to "Comedy / Slice of Life",
-        "$mainUrl/tag/slice-of-life/page/%d/" to "Comedy / Slice of Life",
-        "$mainUrl/tag/fantasy/page/%d/" to "Fantasy / Magic / Supernatural",
-        "$mainUrl/tag/magic/page/%d/" to "Fantasy / Magic / Supernatural",
-        "$mainUrl/tag/supernatural/page/%d/" to "Fantasy / Magic / Supernatural",
-        "$mainUrl/tag/scifi/page/%d/" to "Sci-Fi / Mecha",
-        "$mainUrl/tag/mecha/page/%d/" to "Sci-Fi / Mecha",
-        "$mainUrl/tag/horror/page/%d/" to "Horror / Mystery / Thriller",
-        "$mainUrl/tag/mystery/page/%d/" to "Horror / Mystery / Thriller",
-        "$mainUrl/tag/thriller/page/%d/" to "Horror / Mystery / Thriller",
-        "$mainUrl/tag/ecchi/page/%d/" to "Ecchi / Harem / Adult",
-        "$mainUrl/tag/harem/page/%d/" to "Ecchi / Harem / Adult",
-        "$mainUrl/tag/adult/page/%d/" to "Ecchi / Harem / Adult",
-        "$mainUrl/tag/sports/page/%d/" to "Sports / Game / Music",
-        "$mainUrl/tag/game/page/%d/" to "Sports / Game / Music",
-        "$mainUrl/tag/music/page/%d/" to "Sports / Game / Music",
+        "$mainUrl/tag/action/page/%d/" to "Action",
+        "$mainUrl/tag/romance/page/%d/" to "Romance",
+        "$mainUrl/tag/fantasy/page/%d/" to "Fantasy",
+        "$mainUrl/tag/comedy/page/%d/" to "Comedy",
         "$mainUrl/tag/school/page/%d/" to "School",
         "$mainUrl/tag/isekai/page/%d/" to "Isekai",
-        "$mainUrl/tag/shounen/page/%d/" to "Shounen"
+        "$mainUrl/tag/shounen/page/%d/" to "Shounen",
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -87,7 +71,7 @@ class Alqanime : MainAPI() {
         val posterUrl = fixUrlNull(this.selectFirst("img")?.attr("src"))
         val typeText = this.selectFirst(".typez")?.text()?.trim() ?: ""
         val epNum = this.selectFirst("a")?.attr("title")
-            ?.let { Regex("Episode\\s*\(\\d+)\", RegexOption.IGNORE_CASE).find(it)?.groupValues?.getOrNull(1)?.toIntOrNull() }
+            ?.let { Regex("Episode\\s*\\((\\d+)\\)", RegexOption.IGNORE_CASE).find(it)?.groupValues?.getOrNull(1)?.toIntOrNull() }
         val rating = this.selectFirst("div.numscore")?.text()?.trim()
         return newAnimeSearchResponse(title, href, getType(typeText)) {
             this.posterUrl = posterUrl
@@ -106,24 +90,29 @@ class Alqanime : MainAPI() {
 
         val rawTitle = document.selectFirst("h1.entry-title")?.text()?.trim() ?: return null
         val title = rawTitle
-            .replace(Regex("\\s*\Episode[^)]*\", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("\\s*\\(Episode[^)]*\\)", RegexOption.IGNORE_CASE), "")
             .replace(Regex("\\s*Sub Indo\\b.*", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("\\s*\BD\.*", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("\\s*\\(BD\\).*", RegexOption.IGNORE_CASE), "")
             .replace(Regex("\\s*BD Batch.*", RegexOption.IGNORE_CASE), "")
             .trim()
 
         val poster = document.selectFirst("div.thumb img")?.attr("src")
         val coverBg = document.selectFirst("div.ime img")?.attr("src")
         val trailerRaw = document.selectFirst("a.trailerbutton")?.attr("href")
-        val trailer = trailerRaw?.let { url ->
-            val videoId = Regex("[?&]v=([^&]+)").find(url)?.groupValues?.getOrNull(1)
-            if (videoId != null) "https://www.youtube.com/embed/$videoId" else url
+        val trailer = trailerRaw?.let { urlTrailer ->
+            val videoId = Regex("[?&]v=([^&]+)").find(urlTrailer)?.groupValues?.getOrNull(1)
+            if (videoId != null) "https://www.youtube.com/embed/$videoId" else urlTrailer
         }
         val description = document.select("div.entry-content > p")
             .filter { it.text().length > 10 }
             .joinToString("\n\n") { it.text().trim() }
             .ifBlank { null }
-        val genres = document.select("div.genxed a").map { it.text() }
+        
+        // MENGAMBIL GENRE DAN MENGELOMPOKKANNYA SECARA GARIS BESAR
+        val rawGenres = document.select("div.genxed a").map { it.text().trim() }
+        val mappedGenres = rawGenres.map { genre -> 
+            AnimeCategory.getCategoryByGenre(genre)?.title ?: genre
+        }.distinct() // distinct() agar tidak ada kategori ganda (misal Isekai & Magic = 2x Fantasy)
 
         val speMap = document.select("div.spe > span").associate { span ->
             val label = span.selectFirst("b")?.text()?.trim() ?: ""
@@ -144,3 +133,218 @@ class Alqanime : MainAPI() {
         val season = document.selectFirst("div.spe > span:contains(Musim) a")?.text()?.trim()
         val duration = Regex("(\\d+)\\s*min").find(
             speMap.entries.find { it.key.contains("Durasi", true) }?.value ?: ""
+        )?.groupValues?.getOrNull(1)?.toIntOrNull()
+        val actors = document.select("div.spe span:contains(Casts) a.casts")
+            .map { Actor(it.text()) }
+        val scoreText = document.selectFirst("strong:contains(Score)")?.text()
+            ?.replace("Score", "")?.trim()
+
+        val episodes = mutableListOf<Episode>()
+        for (col in document.select("div.sorattl.collapsible")) {
+            val epTitle = col.selectFirst("h3")?.text()?.trim() ?: continue
+            if (epTitle.equals("Batch", ignoreCase = true)) continue
+            val epNum = Regex("Episode\\s*(\\d+)", RegexOption.IGNORE_CASE)
+                .find(epTitle)?.groupValues?.getOrNull(1)?.toIntOrNull()
+            val contentDiv = col.nextElementSibling()
+                ?.takeIf { it.hasClass("content") } ?: continue
+
+            val pixeldrainFolderIds = mutableListOf<String>()
+            for (tr in contentDiv.select("tr")) {
+                for (a in tr.select("div.slink a")) {
+                    val resolved = resolveUrl(a.attr("href"))
+                    val listId = Regex("pixeldrain\\.com/l/([A-Za-z0-9]+)").find(resolved)?.groupValues?.get(1)
+                    if (listId != null) pixeldrainFolderIds.add(listId)
+                }
+            }
+
+            if (pixeldrainFolderIds.isNotEmpty()) {
+                val epMap = mutableMapOf<Int, MutableList<EpisodeLink>>()
+                val epThumbs = mutableMapOf<Int, String>()
+                for (listId in pixeldrainFolderIds) {
+                    try {
+                        val apiJson = app.get("https://pixeldrain.com/api/list/$listId")
+                            .parsedSafe<PixeldrainList>()
+                        apiJson?.files
+                            ?.filter { it.mimeType.startsWith("video/") }
+                            ?.sortedBy { it.name }
+                            ?.forEach { file ->
+                                val fileEpNum = Regex("(?:_|-)0*(\\d+)(?:_|-)").find(file.name)
+                                    ?.groupValues?.get(1)?.toIntOrNull() ?: return@forEach
+                                val fileQuality = Regex("(\\d{3,4})p", RegexOption.IGNORE_CASE)
+                                    .find(file.name)?.groupValues?.get(1) ?: ""
+                                val streamUrl = "https://pixeldrain.com/api/file/${file.id}"
+                                epMap.getOrPut(fileEpNum) { mutableListOf() }
+                                    .add(EpisodeLink(streamUrl, fileQuality))
+                                if (!epThumbs.containsKey(fileEpNum))
+                                    epThumbs[fileEpNum] = "https://pixeldrain.com/api/file/${file.id}/thumbnail"
+                            }
+                    } catch (_: Exception) { }
+                }
+                for ((epNum, links) in epMap.toSortedMap()) {
+                    episodes.add(newEpisode(links.toJson()) {
+                        this.name = "Episode $epNum"
+                        this.episode = epNum
+                        this.posterUrl = epThumbs[epNum]
+                    })
+                }
+            }
+
+            if (pixeldrainFolderIds.isEmpty()) {
+                val linkList = mutableListOf<EpisodeLink>()
+                for (tr in contentDiv.select("tr")) {
+                    val quality = tr.selectFirst("div.res")?.text()?.trim() ?: continue
+                    for (a in tr.select("div.slink a")) {
+                        linkList.add(EpisodeLink(a.attr("href"), quality))
+                    }
+                }
+                if (linkList.isNotEmpty()) {
+                    episodes.add(newEpisode(linkList.toJson()) {
+                        this.name = epTitle
+                        this.episode = epNum
+                    })
+                }
+            }
+        }
+
+        return newAnimeLoadResponse(title, url, type) {
+            this.japName = japName
+            engName = title
+            posterUrl = poster
+            backgroundPosterUrl = coverBg
+            this.year = year
+            this.duration = duration
+            addEpisodes(DubStatus.Subbed, episodes.reversed())
+            showStatus = status
+            plot = description
+            addTrailer(trailer, addRaw = true)
+            // MEMASUKKAN GENRE YANG SUDAH DIRINGKAS KE DALAM TAGS CLOUDSTREAM
+            this.tags = listOfNotNull(*mappedGenres.toTypedArray(), studio, season)
+            addActors(actors)
+            this.score = Score.from10(scoreText?.toFloatOrNull())
+        }
+    }
+
+    override suspend fun loadLinks(
+        data: String,
+        isCasting: Boolean,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val links = parseJson<List<EpisodeLink>>(data)
+        links.amap { (rawUrl, quality) ->
+            val resolvedUrl = resolveUrl(rawUrl)
+            val qualityInt = quality.fixQuality()
+
+            if (resolvedUrl.contains("pixeldrain.com/api/file/")) {
+                callback(newExtractorLink("Pixeldrain", "Pixeldrain", resolvedUrl) {
+                    this.referer = "https://pixeldrain.com/"
+                    this.quality = qualityInt
+                })
+                return@amap
+            }
+
+            val collected = mutableListOf<ExtractorLink>()
+            loadExtractor(resolvedUrl, "$mainUrl/", subtitleCallback) { collected.add(it) }
+            collected.forEach { link ->
+                callback(newExtractorLink(link.source, link.name, link.url, link.type) {
+                    this.referer = link.referer
+                    this.quality = qualityInt
+                    this.headers = link.headers
+                    this.extractorData = link.extractorData
+                })
+            }
+        }
+        return true
+    }
+
+    private fun resolveUrl(url: String): String {
+        if (url.contains("ouo.io")) {
+            val sParam = Regex("[?&]s=([^&]+)").find(url)?.groupValues?.getOrNull(1)
+            if (sParam != null) return URLDecoder.decode(sParam, "UTF-8")
+        }
+        if (url.contains("acefile.co/f/")) {
+            val id = Regex("/f/(\\w+)").find(url)?.groupValues?.getOrNull(1)
+            if (id != null) return "https://acefile.co/player/$id"
+        }
+        return url
+    }
+
+    private fun String.fixQuality(): Int = when {
+        this.contains("1080", true) -> Qualities.P1080.value
+        this.contains("720", true) -> Qualities.P720.value
+        this.contains("480", true) -> Qualities.P480.value
+        this.contains("360", true) -> Qualities.P360.value
+        else -> Qualities.Unknown.value
+    }
+
+    data class EpisodeLink(
+        @param:JsonProperty("url") val url: String,
+        @param:JsonProperty("quality") val quality: String
+    )
+
+    data class PixeldrainList(
+        @param:JsonProperty("files") val files: List<PixeldrainFile> = emptyList()
+    )
+
+    data class PixeldrainFile(
+        @param:JsonProperty("id") val id: String,
+        @param:JsonProperty("name") val name: String,
+        @param:JsonProperty("mime_type") val mimeType: String = ""
+    )
+}
+
+// === ENUM KATEGORI GENRE (DITEMPATKAN DI LUAR CLASS UTAMA) ===
+enum class AnimeCategory(val title: String, val subGenres: List<String>) {
+    ACTION_ADVENTURE(
+        title = "Action & Adventure",
+        subGenres = listOf("Action", "Adventure", "Martial Arts", "Samurai", "Super Power", "Survival", "Combat Sports", "Military")
+    ),
+    COMEDY(
+        title = "Comedy",
+        subGenres = listOf("Comedy", "Gag Humor", "Parody")
+    ),
+    DRAMA_ROMANCE(
+        title = "Drama & Romance",
+        subGenres = listOf("Drama", "Romance", "Boys Love", "Girls Love", "Love Polygon", "Love Status Quo")
+    ),
+    FANTASY_SCIFI(
+        title = "Fantasy & Sci-Fi",
+        subGenres = listOf("Fantasy", "Sci-Fi", "Supernatural", "Isekai", "Magic", "Mahou Shoujo", "Mythology", "Demons", "Urban Fantasy", "Reincarnation", "Vampire", "Mecha", "Space", "Time Travel")
+    ),
+    MYSTERY_HORROR(
+        title = "Mystery, Thriller & Horror",
+        subGenres = listOf("Mystery", "Thriller", "Suspense", "Detective", "Police", "Psychological", "Horror", "Gore", "Dementia", "Organized Crime")
+    ),
+    SLICE_OF_LIFE(
+        title = "Slice of Life & Everyday",
+        subGenres = listOf("Slice of Life", "Iyashikei", "Kids", "Childcare", "CGDCT", "Educational", "Pets", "School", "Workplace", "Medical")
+    ),
+    SPORTS_GAMES(
+        title = "Sports & Games",
+        subGenres = listOf("Sports", "Team Sports", "Racing", "Cars", "Strategy Game", "High Stakes Game", "Video Game")
+    ),
+    ARTS_CULTURE(
+        title = "Arts, Music & Culture",
+        subGenres = listOf("Music", "Idols (Female)", "Idols (Male)", "Performing Arts", "Showbiz", "Visual Arts", "Otaku Culture", "Gourmet", "Historical")
+    ),
+    DEMOGRAPHICS(
+        title = "Demographics",
+        subGenres = listOf("Shounen", "Shoujo", "Seinen", "Josei")
+    ),
+    MATURE(
+        title = "Mature & Ecchi",
+        subGenres = listOf("Ecchi", "Erotica", "Harem", "Reverse Harem", "Adult Cast", "Hentong")
+    ),
+    OTHERS(
+        title = "Miscellaneous / Specific Themes",
+        subGenres = listOf("Anthropomorphic", "Avant Garde", "Award Winning", "Crossdressing", "Delinquents", "Donghua", "Korea", "Magical Sex Shift", "Malaysia", "US", "Villainess")
+    );
+
+    companion object {
+        fun getCategoryByGenre(genre: String): AnimeCategory? {
+            return entries.find { category ->
+                category.subGenres.any { it.equals(genre, ignoreCase = true) }
+            }
+        }
+    }
+}
