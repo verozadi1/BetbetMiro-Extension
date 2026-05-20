@@ -1,10 +1,10 @@
 // use an integer for version numbers
-version = 2
+version = 3
 
 cloudstream {
     // All of these properties are optional, you can safely remove them
 
-    description = "Anizone.to Anime subtitulado y con multiples doblajes"
+    description = "AniZone.to - anime subtitle dan multi-dubbing"
     language = "id"
     authors = listOf("BetbetMiro")
 

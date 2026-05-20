@@ -47,10 +47,45 @@ class AnizoneProvider : MainAPI() {
     override val hasQuickSearch = true
     override val hasDownloadSupport = true
     override val mainPage = mainPageOf(
-        "2" to "Animes",
-        "4" to "Películas",
-        "6" to "Más Contenido"
+        "2" to "Anime",
+        "4" to "Film Anime",
+        "6" to "Konten Lainnya",
+
+        // Kategori / genre dari tag AniZone
+        "tag/hmi0gccz" to "Manga",
+        "tag/bio3ygrp" to "Komedi",
+        "tag/s1ssghb1" to "Fantasi",
+        "tag/fxndqllf" to "Shounen",
+        "tag/xottt75h" to "Aksi",
+        "tag/tzgxn5ic" to "Seinen",
+        "tag/2ch5lzak" to "Novel",
+        "tag/fqe1dvxj" to "Romantis",
+        "tag/n6ta6ma6" to "Kehidupan Sekolah",
+        "tag/7kov4siq" to "Kekerasan"
     )
+    private fun translateGenre(name: String): String {
+        return when (name.trim().lowercase(Locale.ROOT)) {
+            "action" -> "Aksi"
+            "adventure" -> "Petualangan"
+            "comedy" -> "Komedi"
+            "daily life", "slice of life" -> "Kehidupan Sehari-hari"
+            "fantasy" -> "Fantasi"
+            "high school" -> "SMA"
+            "historical" -> "Sejarah"
+            "manga" -> "Manga"
+            "novel" -> "Novel"
+            "romance" -> "Romantis"
+            "school life" -> "Kehidupan Sekolah"
+            "seinen" -> "Seinen"
+            "shounen" -> "Shounen"
+            "sports" -> "Olahraga"
+            "thriller" -> "Thriller"
+            "tragedy" -> "Tragedi"
+            "violence" -> "Kekerasan"
+            else -> name.trim()
+        }
+    }
+
     private var cookies = mutableMapOf<String, String>()
     private var wireData = mutableMapOf(
         "wireSnapshot" to "",
@@ -164,9 +199,13 @@ class AnizoneProvider : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest
     ): HomePageResponse {
 
+        if (request.data.startsWith("tag/")) {
+            return getTagMainPage(page, request)
+        }
+
         val initialized = initializeLiveWire()
         if (!initialized) {
-            Log.w("AniZone", "Inicialización LiveWire fallida. Retornando lista de inicio vacía.")
+            Log.w("AniZone", "Inisialisasi LiveWire gagal. Mengembalikan daftar awal kosong.")
             return newHomePageResponse(
                 HomePageList(request.name, emptyList(), isHorizontalImages = false),
                 hasNext = false
@@ -196,7 +235,7 @@ class AnizoneProvider : MainAPI() {
                 hasNext = (doc.selectFirst(".h-12[x-intersect=\"\$wire.loadMore()\"]") != null)
             )
         } catch (e: Exception) {
-            Log.e("AniZone", "Fallo al procesar LiveWire en getMainPage: ${e.message}")
+            Log.e("AniZone", "Gagal memproses LiveWire di getMainPage: ${e.message}")
             return newHomePageResponse(
                 HomePageList(request.name, emptyList(), isHorizontalImages = false),
                 hasNext = false
@@ -204,14 +243,48 @@ class AnizoneProvider : MainAPI() {
         }
     }
 
-    private fun toResult(post: Element): SearchResponse {
-        val title = post.selectFirst("img")?.attr("alt") ?: ""
-        val url = post.selectFirst("a")?.attr("href") ?: ""
+    private suspend fun getTagMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        return try {
+            val url = if (page <= 1) {
+                "$mainUrl/${request.data}"
+            } else {
+                "$mainUrl/${request.data}?page=$page"
+            }
 
-        return newMovieSearchResponse(title, url, TvType.Movie) {
+            val doc = app.get(url).document
+            val items = doc.select("div[wire:key]")
+                .ifEmpty { doc.select("article") }
+                .ifEmpty { doc.select("a[href*='/anime/']").mapNotNull { it.parent() } }
+                .distinctBy { it.selectFirst("a[href*='/anime/']")?.attr("href") ?: it.text() }
+                .mapNotNull { toResult(it) }
+
+            val hasNext = doc.selectFirst("a[rel=next], a[href*='page=${page + 1}'], .h-12[x-intersect=\"\$wire.loadMore()\"]") != null
+
+            newHomePageResponse(
+                HomePageList(request.name, items, isHorizontalImages = false),
+                hasNext = hasNext
+            )
+        } catch (e: Exception) {
+            Log.e("AniZone", "Gagal memuat kategori/tag ${request.data}: ${e.message}")
+            newHomePageResponse(
+                HomePageList(request.name, emptyList(), isHorizontalImages = false),
+                hasNext = false
+            )
+        }
+    }
+
+    private fun toResult(post: Element): SearchResponse {
+        val title = post.selectFirst("img")?.attr("alt")?.takeIf { it.isNotBlank() }
+            ?: post.selectFirst("h2, h3, a[href*='/anime/']")?.text()?.trim()
+            ?: ""
+
+        val url = post.selectFirst("a[href*='/anime/']")?.attr("href")
+            ?: post.selectFirst("a")?.attr("href")
+            ?: ""
+
+        return newMovieSearchResponse(title, url, TvType.Anime) {
             this.posterUrl = post.selectFirst("img")
                 ?.attr("src")
-
         }
     }
 
@@ -243,7 +316,7 @@ class AnizoneProvider : MainAPI() {
         val releasedYear = rowLines.getOrNull(3)
         val status = if (rowLines.getOrNull(1) == "Completed") ShowStatus.Completed
         else if (rowLines.getOrNull(1) == "Ongoing") ShowStatus.Ongoing else null
-        val genres = doc.select("a[wire:navigate][wire:key]").map { it.text() }
+        val genres = doc.select("a[wire:navigate][wire:key]").map { translateGenre(it.text()) }
 
         val imdbLink = doc.selectFirst("a[href*='imdb.com']")
 
