@@ -54,10 +54,7 @@ class CinemacityProvider : MainAPI() {
         TvType.Movie, TvType.TvSeries, TvType.Cartoon, TvType.AsianDrama, TvType.Anime
     )
 
-    private var dynamicCookies: Map<String, String> = mapOf(
-        "dle_user_id" to "32729",
-        "dle_password" to "894171c6a8dab18ee594d5c652009a35"
-    )
+    private var dynamicCookies: Map<String, String> = emptyMap()
 
     private val protectionHeaders = mapOf(
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -175,10 +172,42 @@ class CinemacityProvider : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
-        "$mainUrl/tv-series/" to "Series",
+        "$mainUrl/" to "General",
         "$mainUrl/movies/" to "Movies",
+        "$mainUrl/tv-series/" to "TV Series",
         "$mainUrl/xfsearch/genre/animation/" to "Animation",
-        "$mainUrl/xfsearch/genre/documentary/" to "Documentary"
+        "$mainUrl/xfsearch/genre/documentary/" to "Documentaries",
+
+        "$mainUrl/xfsearch/genre/action/" to "Action",
+        "$mainUrl/xfsearch/genre/adventure/" to "Adventure",
+        "$mainUrl/xfsearch/genre/anime/" to "Anime",
+        "$mainUrl/xfsearch/genre/asian/" to "Asian",
+        "$mainUrl/xfsearch/genre/biography/" to "Biography",
+        "$mainUrl/xfsearch/genre/indian/" to "Indian",
+        "$mainUrl/xfsearch/genre/comedy/" to "Comedy",
+        "$mainUrl/xfsearch/genre/crime/" to "Crime",
+        "$mainUrl/xfsearch/genre/drama/" to "Drama",
+        "$mainUrl/xfsearch/genre/family/" to "Family",
+        "$mainUrl/xfsearch/genre/fantasy/" to "Fantasy",
+        "$mainUrl/xfsearch/genre/film-noir/" to "Film-Noir",
+        "$mainUrl/xfsearch/genre/game-show/" to "Game-Show",
+        "$mainUrl/xfsearch/genre/history/" to "History",
+        "$mainUrl/xfsearch/genre/horror/" to "Horror",
+        "$mainUrl/xfsearch/genre/music/" to "Music",
+        "$mainUrl/xfsearch/genre/musical/" to "Musical",
+        "$mainUrl/xfsearch/genre/mystery/" to "Mystery",
+        "$mainUrl/xfsearch/genre/news/" to "News",
+        "$mainUrl/xfsearch/genre/reality-tv/" to "Reality-TV",
+        "$mainUrl/xfsearch/genre/romance/" to "Romance",
+        "$mainUrl/xfsearch/genre/sci-fi/" to "Sci-Fi",
+        "$mainUrl/xfsearch/genre/short/" to "Short",
+        "$mainUrl/xfsearch/genre/sport/" to "Sport",
+        "$mainUrl/xfsearch/genre/specials/" to "Specials",
+        "$mainUrl/xfsearch/genre/stand-up/" to "Stand-Up",
+        "$mainUrl/xfsearch/genre/talk-show/" to "Talk-Show",
+        "$mainUrl/xfsearch/genre/thriller/" to "Thriller",
+        "$mainUrl/xfsearch/genre/war/" to "War",
+        "$mainUrl/xfsearch/genre/western/" to "Western"
     )
 
     override suspend fun getMainPage(
@@ -200,6 +229,9 @@ class CinemacityProvider : MainAPI() {
         } ?: return null
 
         val title = link.text().split(" (", " S0", " -")[0].trim()
+            .ifBlank { link.attr("title").split(" (", " S0", " -")[0].trim() }
+            .ifBlank { this.selectFirst("img")?.attr("alt")?.split(" (", " S0", " -")?.getOrNull(0)?.trim().orEmpty() }
+        if (title.isBlank()) return null
         val href = fixUrlNull(link.attr("href")) ?: return null
         val img = this.selectFirst("img")
         val imgSrc = img?.attr("src")
@@ -292,6 +324,8 @@ class CinemacityProvider : MainAPI() {
 
         val ogTitle = doc.selectFirst("meta[property=og:title]")?.attr("content").orEmpty()
         val title = ogTitle.substringBefore("(").trim()
+            .ifBlank { doc.selectFirst("h1, .dar-full_title")?.text()?.substringBefore("(")?.trim().orEmpty() }
+            .ifBlank { "CinemaCity" }
         val poster = doc.selectFirst("meta[property=og:image]")?.attr("content").orEmpty()
         val bgposter = doc.selectFirst("div.dar-full_bg a")?.attr("href")
         val trailer = doc.select("div.dar-full_bg.e-cover > div").attr("data-vbg")
@@ -619,6 +653,10 @@ class CinemacityProvider : MainAPI() {
         }
 
         val streamUrls = mutableListOf<String>()
+
+        obj.optString("streamUrl")
+            .takeIf { it.isNotBlank() }
+            ?.let { streamUrls += it }
 
         obj.optJSONArray("streams")?.let { arr ->
             for (i in 0 until arr.length()) {

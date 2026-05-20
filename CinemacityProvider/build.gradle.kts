@@ -17,7 +17,9 @@ cloudstream {
     tvTypes = listOf(
         "Movie",
         "TvSeries",
-        "Cartoon"
+        "Cartoon",
+        "AsianDrama",
+        "Anime"
     )
     language = "id"
     iconUrl = "https://i.imgur.com/A87j6ue.png"
