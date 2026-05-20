@@ -13,7 +13,7 @@ class AnimexinProvider : BasePlugin() {
     override fun load() {
         registerMainAPI(object : MainAPI() {
             override var mainUrl = "https://animexin.dev"
-            override var name = "Animexin"
+            override var name = "Animexin."
             override val hasMainPage = true
             override var lang = "id"
             override val hasDownloadSupport = true
