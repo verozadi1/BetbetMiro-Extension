@@ -16,6 +16,7 @@ class Alqanime : MainAPI() {
     override val hasMainPage = true
     override var lang = "id"
     override val hasDownloadSupport = true
+
     override val supportedTypes = setOf(
         TvType.Anime,
         TvType.AnimeMovie,
@@ -45,17 +46,140 @@ class Alqanime : MainAPI() {
 
     override val mainPage = mainPageOf(
         "$mainUrl/page/%d/" to "Rilisan Terbaru",
+        "$mainUrl/popular/page/%d/" to "Popular",
         "$mainUrl/advanced-search/page/%d/?status=ongoing&order=update" to "Sedang Tayang",
         "$mainUrl/advanced-search/page/%d/?status=completed&order=update" to "Selesai Tayang",
-        "$mainUrl/advanced-search/page/%d/?type[]=movie&order=update" to "Film Layar Lebar",
-        "$mainUrl/popular/page/%d/" to "Popular",
+        "$mainUrl/advanced-search/page/%d/?type[]=movie&order=update" to "Movie Anime",
+
+        // A
         "$mainUrl/tag/action/page/%d/" to "Action",
-        "$mainUrl/tag/romance/page/%d/" to "Romance",
-        "$mainUrl/tag/fantasy/page/%d/" to "Fantasy",
+        "$mainUrl/tag/adult-cast/page/%d/" to "Adult Cast",
+        "$mainUrl/tag/adventure/page/%d/" to "Adventure",
+        "$mainUrl/tag/anthropomorphic/page/%d/" to "Anthropomorphic",
+        "$mainUrl/tag/avant-garde/page/%d/" to "Avant Garde",
+        "$mainUrl/tag/award-winning/page/%d/" to "Award Winning",
+
+        // B
+        "$mainUrl/tag/boys-love/page/%d/" to "Boys Love",
+
+        // C
+        "$mainUrl/tag/cars/page/%d/" to "Cars",
+        "$mainUrl/tag/cgdct/page/%d/" to "CGDCT",
+        "$mainUrl/tag/childcare/page/%d/" to "Childcare",
+        "$mainUrl/tag/combat-sports/page/%d/" to "Combat Sports",
         "$mainUrl/tag/comedy/page/%d/" to "Comedy",
-        "$mainUrl/tag/school/page/%d/" to "School",
+        "$mainUrl/tag/crossdressing/page/%d/" to "Crossdressing",
+
+        // D
+        "$mainUrl/tag/delinquents/page/%d/" to "Delinquents",
+        "$mainUrl/tag/dementia/page/%d/" to "Dementia",
+        "$mainUrl/tag/demons/page/%d/" to "Demons",
+        "$mainUrl/tag/detective/page/%d/" to "Detective",
+        "$mainUrl/tag/donghua/page/%d/" to "Donghua",
+        "$mainUrl/tag/drama/page/%d/" to "Drama",
+
+        // E
+        "$mainUrl/tag/ecchi/page/%d/" to "Ecchi",
+        "$mainUrl/tag/educational/page/%d/" to "Educational",
+        "$mainUrl/tag/erotica/page/%d/" to "Erotica",
+
+        // F
+        "$mainUrl/tag/fantasy/page/%d/" to "Fantasy",
+
+        // G
+        "$mainUrl/tag/gag-humor/page/%d/" to "Gag Humor",
+        "$mainUrl/tag/girls-love/page/%d/" to "Girls Love",
+        "$mainUrl/tag/gore/page/%d/" to "Gore",
+        "$mainUrl/tag/gourmet/page/%d/" to "Gourmet",
+
+        // H
+        "$mainUrl/tag/harem/page/%d/" to "Harem",
+        "$mainUrl/tag/hentong/page/%d/" to "Hentong",
+        "$mainUrl/tag/high-stakes-game/page/%d/" to "High Stakes Game",
+        "$mainUrl/tag/historical/page/%d/" to "Historical",
+        "$mainUrl/tag/horror/page/%d/" to "Horror",
+
+        // I
+        "$mainUrl/tag/idols-female/page/%d/" to "Idols Female",
+        "$mainUrl/tag/idols-male/page/%d/" to "Idols Male",
         "$mainUrl/tag/isekai/page/%d/" to "Isekai",
+        "$mainUrl/tag/iyashikei/page/%d/" to "Iyashikei",
+
+        // J
+        "$mainUrl/tag/josei/page/%d/" to "Josei",
+
+        // K
+        "$mainUrl/tag/kids/page/%d/" to "Kids",
+        "$mainUrl/tag/korea/page/%d/" to "Korea",
+
+        // L
+        "$mainUrl/tag/love-polygon/page/%d/" to "Love Polygon",
+        "$mainUrl/tag/love-status-quo/page/%d/" to "Love Status Quo",
+
+        // M
+        "$mainUrl/tag/magic/page/%d/" to "Magic",
+        "$mainUrl/tag/magical-sex-shift/page/%d/" to "Magical Sex Shift",
+        "$mainUrl/tag/mahou-shoujo/page/%d/" to "Mahou Shoujo",
+        "$mainUrl/tag/malaysia/page/%d/" to "Malaysia",
+        "$mainUrl/tag/martial-arts/page/%d/" to "Martial Arts",
+        "$mainUrl/tag/mecha/page/%d/" to "Mecha",
+        "$mainUrl/tag/medical/page/%d/" to "Medical",
+        "$mainUrl/tag/military/page/%d/" to "Military",
+        "$mainUrl/tag/music/page/%d/" to "Music",
+        "$mainUrl/tag/mystery/page/%d/" to "Mystery",
+        "$mainUrl/tag/mythology/page/%d/" to "Mythology",
+
+        // O
+        "$mainUrl/tag/organized-crime/page/%d/" to "Organized Crime",
+        "$mainUrl/tag/otaku-culture/page/%d/" to "Otaku Culture",
+
+        // P
+        "$mainUrl/tag/parody/page/%d/" to "Parody",
+        "$mainUrl/tag/performing-arts/page/%d/" to "Performing Arts",
+        "$mainUrl/tag/pets/page/%d/" to "Pets",
+        "$mainUrl/tag/police/page/%d/" to "Police",
+        "$mainUrl/tag/psychological/page/%d/" to "Psychological",
+
+        // R
+        "$mainUrl/tag/racing/page/%d/" to "Racing",
+        "$mainUrl/tag/reincarnation/page/%d/" to "Reincarnation",
+        "$mainUrl/tag/reverse-harem/page/%d/" to "Reverse Harem",
+        "$mainUrl/tag/romance/page/%d/" to "Romance",
+
+        // S
+        "$mainUrl/tag/samurai/page/%d/" to "Samurai",
+        "$mainUrl/tag/school/page/%d/" to "School",
+        "$mainUrl/tag/sci-fi/page/%d/" to "Sci-Fi",
+        "$mainUrl/tag/seinen/page/%d/" to "Seinen",
+        "$mainUrl/tag/shoujo/page/%d/" to "Shoujo",
         "$mainUrl/tag/shounen/page/%d/" to "Shounen",
+        "$mainUrl/tag/showbiz/page/%d/" to "Showbiz",
+        "$mainUrl/tag/slice-of-life/page/%d/" to "Slice of Life",
+        "$mainUrl/tag/space/page/%d/" to "Space",
+        "$mainUrl/tag/sports/page/%d/" to "Sports",
+        "$mainUrl/tag/strategy-game/page/%d/" to "Strategy Game",
+        "$mainUrl/tag/super-power/page/%d/" to "Super Power",
+        "$mainUrl/tag/supernatural/page/%d/" to "Supernatural",
+        "$mainUrl/tag/survival/page/%d/" to "Survival",
+        "$mainUrl/tag/suspense/page/%d/" to "Suspense",
+
+        // T
+        "$mainUrl/tag/team-sports/page/%d/" to "Team Sports",
+        "$mainUrl/tag/thriller/page/%d/" to "Thriller",
+        "$mainUrl/tag/time-travel/page/%d/" to "Time Travel",
+
+        // U
+        "$mainUrl/tag/urban-fantasy/page/%d/" to "Urban Fantasy",
+        "$mainUrl/tag/us/page/%d/" to "US",
+
+        // V
+        "$mainUrl/tag/vampire/page/%d/" to "Vampire",
+        "$mainUrl/tag/video-game/page/%d/" to "Video Game",
+        "$mainUrl/tag/villainess/page/%d/" to "Villainess",
+        "$mainUrl/tag/visual-arts/page/%d/" to "Visual Arts",
+
+        // W
+        "$mainUrl/tag/workplace/page/%d/" to "Workplace"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -70,9 +194,15 @@ class Alqanime : MainAPI() {
         val title = this.selectFirst(".ntitle")?.text()?.trim() ?: return null
         val posterUrl = fixUrlNull(this.selectFirst("img")?.attr("src"))
         val typeText = this.selectFirst(".typez")?.text()?.trim() ?: ""
+
         val epNum = this.selectFirst("a")?.attr("title")
-            ?.let { Regex("Episode\\s*\\((\\d+)\\)", RegexOption.IGNORE_CASE).find(it)?.groupValues?.getOrNull(1)?.toIntOrNull() }
+            ?.let {
+                Regex("Episode\\s*\\((\\d+)\\)", RegexOption.IGNORE_CASE)
+                    .find(it)?.groupValues?.getOrNull(1)?.toIntOrNull()
+            }
+
         val rating = this.selectFirst("div.numscore")?.text()?.trim()
+
         return newAnimeSearchResponse(title, href, getType(typeText)) {
             this.posterUrl = posterUrl
             addDubStatus("Sub Indo", epNum)
@@ -84,205 +214,4 @@ class Alqanime : MainAPI() {
         val document = app.get("$mainUrl/?s=$query", headers = commonHeaders).document
         return document.select("article.bs").mapNotNull { it.toSearchResult() }
     }
-
-    override suspend fun load(url: String): LoadResponse? {
-        val document = app.get(url, headers = commonHeaders).document
-
-        val rawTitle = document.selectFirst("h1.entry-title")?.text()?.trim() ?: return null
-        val title = rawTitle
-            .replace(Regex("\\s*\\(Episode[^)]*\\)", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("\\s*Sub Indo\\b.*", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("\\s*\\(BD\\).*", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("\\s*BD Batch.*", RegexOption.IGNORE_CASE), "")
-            .trim()
-
-        val poster = document.selectFirst("div.thumb img")?.attr("src")
-        val coverBg = document.selectFirst("div.ime img")?.attr("src")
-        val trailerRaw = document.selectFirst("a.trailerbutton")?.attr("href")
-        val trailer = trailerRaw?.let { url ->
-            val videoId = Regex("[?&]v=([^&]+)").find(url)?.groupValues?.getOrNull(1)
-            if (videoId != null) "https://www.youtube.com/embed/$videoId" else url
-        }
-        val description = document.select("div.entry-content > p")
-            .filter { it.text().length > 10 }
-            .joinToString("\n\n") { it.text().trim() }
-            .ifBlank { null }
-        val genres = document.select("div.genxed a").map { it.text() }
-
-        val speMap = document.select("div.spe > span").associate { span ->
-            val label = span.selectFirst("b")?.text()?.trim() ?: ""
-            val value = span.text().replace(label, "").trim()
-            label to value
-        }
-
-        val status = getStatus(speMap.entries.find { it.key.contains("Status", true) }?.value ?: "")
-        val typeText = speMap.entries.find { it.key.contains("Tipe", true) }?.value ?: ""
-        val type = getType(typeText)
-        val year = Regex("(\\d{4})").find(
-            speMap.entries.find { it.key.contains("Dirilis", true) }?.value ?: ""
-        )?.groupValues?.getOrNull(1)?.toIntOrNull()
-
-        val japName = document.selectFirst("span.alter")?.text()?.trim()
-            ?.split(",")?.firstOrNull()?.trim()?.trimStart('-')?.trimEnd('-')?.trim()
-        val studio = document.selectFirst("div.spe > span:contains(Studio) a")?.text()?.trim()
-        val season = document.selectFirst("div.spe > span:contains(Musim) a")?.text()?.trim()
-        val duration = Regex("(\\d+)\\s*min").find(
-            speMap.entries.find { it.key.contains("Durasi", true) }?.value ?: ""
-        )?.groupValues?.getOrNull(1)?.toIntOrNull()
-        val actors = document.select("div.spe span:contains(Casts) a.casts")
-            .map { Actor(it.text()) }
-        val scoreText = document.selectFirst("strong:contains(Score)")?.text()
-            ?.replace("Score", "")?.trim()
-
-        val episodes = mutableListOf<Episode>()
-        for (col in document.select("div.sorattl.collapsible")) {
-            val epTitle = col.selectFirst("h3")?.text()?.trim() ?: continue
-            if (epTitle.equals("Batch", ignoreCase = true)) continue
-            val epNum = Regex("Episode\\s*(\\d+)", RegexOption.IGNORE_CASE)
-                .find(epTitle)?.groupValues?.getOrNull(1)?.toIntOrNull()
-            val contentDiv = col.nextElementSibling()
-                ?.takeIf { it.hasClass("content") } ?: continue
-
-            val pixeldrainFolderIds = mutableListOf<String>()
-            for (tr in contentDiv.select("tr")) {
-                for (a in tr.select("div.slink a")) {
-                    val resolved = resolveUrl(a.attr("href"))
-                    val listId = Regex("pixeldrain\\.com/l/([A-Za-z0-9]+)").find(resolved)?.groupValues?.get(1)
-                    if (listId != null) pixeldrainFolderIds.add(listId)
-                }
-            }
-
-            if (pixeldrainFolderIds.isNotEmpty()) {
-                val epMap = mutableMapOf<Int, MutableList<EpisodeLink>>()
-                val epThumbs = mutableMapOf<Int, String>()
-                for (listId in pixeldrainFolderIds) {
-                    try {
-                        val apiJson = app.get("https://pixeldrain.com/api/list/$listId")
-                            .parsedSafe<PixeldrainList>()
-                        apiJson?.files
-                            ?.filter { it.mimeType.startsWith("video/") }
-                            ?.sortedBy { it.name }
-                            ?.forEach { file ->
-                                val fileEpNum = Regex("(?:_|-)0*(\\d+)(?:_|-)").find(file.name)
-                                    ?.groupValues?.get(1)?.toIntOrNull() ?: return@forEach
-                                val fileQuality = Regex("(\\d{3,4})p", RegexOption.IGNORE_CASE)
-                                    .find(file.name)?.groupValues?.get(1) ?: ""
-                                val streamUrl = "https://pixeldrain.com/api/file/${file.id}"
-                                epMap.getOrPut(fileEpNum) { mutableListOf() }
-                                    .add(EpisodeLink(streamUrl, fileQuality))
-                                if (!epThumbs.containsKey(fileEpNum))
-                                    epThumbs[fileEpNum] = "https://pixeldrain.com/api/file/${file.id}/thumbnail"
-                            }
-                    } catch (_: Exception) { }
-                }
-                for ((epNum, links) in epMap.toSortedMap()) {
-                    episodes.add(newEpisode(links.toJson()) {
-                        this.name = "Episode $epNum"
-                        this.episode = epNum
-                        this.posterUrl = epThumbs[epNum]
-                    })
-                }
-            }
-
-            if (pixeldrainFolderIds.isEmpty()) {
-                val linkList = mutableListOf<EpisodeLink>()
-                for (tr in contentDiv.select("tr")) {
-                    val quality = tr.selectFirst("div.res")?.text()?.trim() ?: continue
-                    for (a in tr.select("div.slink a")) {
-                        linkList.add(EpisodeLink(a.attr("href"), quality))
-                    }
-                }
-                if (linkList.isNotEmpty()) {
-                    episodes.add(newEpisode(linkList.toJson()) {
-                        this.name = epTitle
-                        this.episode = epNum
-                    })
-                }
-            }
-        }
-
-        return newAnimeLoadResponse(title, url, type) {
-            this.japName = japName
-            engName = title
-            posterUrl = poster
-            backgroundPosterUrl = coverBg
-            this.year = year
-            this.duration = duration
-            addEpisodes(DubStatus.Subbed, episodes.reversed())
-            showStatus = status
-            plot = description
-            addTrailer(trailer, addRaw = true)
-            this.tags = listOfNotNull(*genres.toTypedArray(), studio, season)
-            addActors(actors)
-            this.score = Score.from10(scoreText?.toFloatOrNull())
-        }
-    }
-
-    override suspend fun loadLinks(
-        data: String,
-        isCasting: Boolean,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        val links = parseJson<List<EpisodeLink>>(data)
-        links.amap { (rawUrl, quality) ->
-            val resolvedUrl = resolveUrl(rawUrl)
-            val qualityInt = quality.fixQuality()
-
-            if (resolvedUrl.contains("pixeldrain.com/api/file/")) {
-                callback(newExtractorLink("Pixeldrain", "Pixeldrain", resolvedUrl) {
-                    this.referer = "https://pixeldrain.com/"
-                    this.quality = qualityInt
-                })
-                return@amap
-            }
-
-            val collected = mutableListOf<ExtractorLink>()
-            loadExtractor(resolvedUrl, "$mainUrl/", subtitleCallback) { collected.add(it) }
-            collected.forEach { link ->
-                callback(newExtractorLink(link.source, link.name, link.url, link.type) {
-                    this.referer = link.referer
-                    this.quality = qualityInt
-                    this.headers = link.headers
-                    this.extractorData = link.extractorData
-                })
-            }
-        }
-        return true
-    }
-
-    private fun resolveUrl(url: String): String {
-        if (url.contains("ouo.io")) {
-            val sParam = Regex("[?&]s=([^&]+)").find(url)?.groupValues?.getOrNull(1)
-            if (sParam != null) return URLDecoder.decode(sParam, "UTF-8")
-        }
-        if (url.contains("acefile.co/f/")) {
-            val id = Regex("/f/(\\w+)").find(url)?.groupValues?.getOrNull(1)
-            if (id != null) return "https://acefile.co/player/$id"
-        }
-        return url
-    }
-
-    private fun String.fixQuality(): Int = when {
-        this.contains("1080", true) -> Qualities.P1080.value
-        this.contains("720", true) -> Qualities.P720.value
-        this.contains("480", true) -> Qualities.P480.value
-        this.contains("360", true) -> Qualities.P360.value
-        else -> Qualities.Unknown.value
-    }
-
-    data class EpisodeLink(
-        @param:JsonProperty("url") val url: String,
-        @param:JsonProperty("quality") val quality: String
-    )
-
-    data class PixeldrainList(
-        @param:JsonProperty("files") val files: List<PixeldrainFile> = emptyList()
-    )
-
-    data class PixeldrainFile(
-        @param:JsonProperty("id") val id: String,
-        @param:JsonProperty("name") val name: String,
-        @param:JsonProperty("mime_type") val mimeType: String = ""
-    )
 }
