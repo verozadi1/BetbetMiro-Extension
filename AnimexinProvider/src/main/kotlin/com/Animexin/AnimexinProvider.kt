@@ -1,9 +1,8 @@
-package com.animexin
+package com.Animexin
 
 import com.lagradost.cloudstream3.plugins.BasePlugin
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.extractors.Dailymotion
-import com.animexin.Animexin
 
 @CloudstreamPlugin
 class AnimexinProvider: BasePlugin() {
