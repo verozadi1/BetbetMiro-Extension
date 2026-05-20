@@ -50,13 +50,7 @@ class AnimeIndo : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val isMovie = request.data.contains("/movie/")
-        val isGenre = request.data.contains("/genres/")
-
-        val url = when {
-            isMovie -> if (page == 1) request.data else "${request.data}page/$page/"
-            isGenre -> "${request.data}page/$page/"
-            else -> if (page == 1) request.data else "${request.data}page/$page/"
-        }
+        val url = if (page == 1) request.data else "${request.data.trimEnd('/')}/page/$page/"
         
         val document = app.get(url).document
 
@@ -76,23 +70,26 @@ class AnimeIndo : MainAPI() {
                 }
             }.distinctBy { it.url }
         } else {
-            // Selector diperluas agar mencakup halaman genre
-            document.select("div.menu a[href], div.animemenu a[href], div.list-anime-parent a[href]").mapNotNull { a ->
-                val inner = a.selectFirst("div.list-anime") ?: return@mapNotNull null
-                val href = a.attr("href")
-
-                val title = inner.selectFirst("p")?.text()?.trim() ?: return@mapNotNull null
-
-                val poster = inner.selectFirst("img")?.let { img ->
-                    img.attr("data-original").ifBlank { img.attr("src") }
-                }?.takeUnless { it.contains("loading") }
-
-                val epNum = inner.selectFirst("span.eps")?.text()?.trim()?.toIntOrNull()
-                val animeUrl = episodeToAnimeUrl(href)
-
-                newAnimeSearchResponse(title, fixUrl(animeUrl), TvType.Anime) {
-                    this.posterUrl = fixUrl(poster ?: "")
-                    addSub(epNum)
+            document.select("div.menu a, div.animemenu a, div.list-anime-parent a, table.otable tr").mapNotNull { element ->
+                if (element.tagName() == "tr") {
+                    val link = element.selectFirst("td.vithumb a[href]") ?: return@mapNotNull null
+                    val href = link.attr("href")
+                    val poster = link.selectFirst("img")?.let { it.attr("data-original").ifBlank { it.attr("src") } }?.let { fixUrl(it) }
+                    val title = element.selectFirst("td.videsc a")?.text()?.trim() ?: return@mapNotNull null
+                    newAnimeSearchResponse(title, fixUrl(href), TvType.Anime) { this.posterUrl = poster }
+                } else {
+                    val inner = element.selectFirst("div.list-anime") ?: return@mapNotNull null
+                    val href = element.attr("href")
+                    val title = inner.selectFirst("p")?.text()?.trim() ?: return@mapNotNull null
+                    val poster = inner.selectFirst("img")?.let { img ->
+                        img.attr("data-original").ifBlank { img.attr("src") }
+                    }?.takeUnless { it.contains("loading") }
+                    val epNum = inner.selectFirst("span.eps")?.text()?.trim()?.toIntOrNull()
+                    
+                    newAnimeSearchResponse(title, fixUrl(episodeToAnimeUrl(href)), TvType.Anime) {
+                        this.posterUrl = fixUrl(poster ?: "")
+                        addSub(epNum)
+                    }
                 }
             }.distinctBy { it.url }
         }
@@ -100,7 +97,6 @@ class AnimeIndo : MainAPI() {
         return newHomePageResponse(request.name, home)
     }
 
-    // Fungsi lain tetap sama
     private fun episodeToAnimeUrl(url: String): String {
         val slug = url.trimEnd('/').substringAfterLast("/")
         val animeSlug = Regex("-episode-\\d+.*$", RegexOption.IGNORE_CASE).replace(slug, "")
@@ -113,7 +109,6 @@ class AnimeIndo : MainAPI() {
             val inner = a.selectFirst("div.list-anime") ?: return@mapNotNull null
             val href = a.attr("href")
             val title = inner.selectFirst("p")?.text()?.trim() ?: return@mapNotNull null
-
             val poster = inner.selectFirst("img")?.let { img ->
                 val dataOrg = img.attr("data-original")
                 if (dataOrg.isNotBlank()) dataOrg else img.attr("src")
