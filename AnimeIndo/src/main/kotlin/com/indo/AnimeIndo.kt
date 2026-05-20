@@ -18,17 +18,46 @@ class AnimeIndo : MainAPI() {
 
     override val mainPage = mainPageOf(
         "$mainUrl/page/" to "Episode Terbaru",
-        "$mainUrl/movie/page/" to "Movie"
+        "$mainUrl/movie/page/" to "Movie",
+        "$mainUrl/genres/action/page/" to "Action",
+        "$mainUrl/genres/adventure/page/" to "Adventure",
+        "$mainUrl/genres/comedy/page/" to "Comedy",
+        "$mainUrl/genres/demons/page/" to "Demons",
+        "$mainUrl/genres/donghua/page/" to "Donghua",
+        "$mainUrl/genres/drama/page/" to "Drama",
+        "$mainUrl/genres/fantasy/page/" to "Fantasy",
+        "$mainUrl/genres/game/page/" to "Game",
+        "$mainUrl/genres/historical/page/" to "Historical",
+        "$mainUrl/genres/horror/page/" to "Horror",
+        "$mainUrl/genres/isekai/page/" to "Isekai",
+        "$mainUrl/genres/magic/page/" to "Magic",
+        "$mainUrl/genres/martial-arts/page/" to "Martial Arts",
+        "$mainUrl/genres/military/page/" to "Military",
+        "$mainUrl/genres/mystery/page/" to "Mystery",
+        "$mainUrl/genres/psychological/page/" to "Psychological",
+        "$mainUrl/genres/reincarnation/page/" to "Reincarnation",
+        "$mainUrl/genres/romance/page/" to "Romance",
+        "$mainUrl/genres/school/page/" to "School",
+        "$mainUrl/genres/sci-fi/page/" to "Sci-Fi",
+        "$mainUrl/genres/seinen/page/" to "Seinen",
+        "$mainUrl/genres/slice-of-life/page/" to "Slice of Life",
+        "$mainUrl/genres/sports/page/" to "Sports",
+        "$mainUrl/genres/super-power/page/" to "Super Power",
+        "$mainUrl/genres/supernatural/page/" to "Supernatural",
+        "$mainUrl/genres/thriller/page/" to "Thriller",
+        "$mainUrl/genres/vampire/page/" to "Vampire"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val isMovie = request.data.contains("/movie/")
+        val isGenre = request.data.contains("/genres/")
 
-        val url = if (isMovie) {
-            if (page == 1) "$mainUrl/movie/" else "$mainUrl/movie/page/$page/"
-        } else {
-            if (page == 1) "$mainUrl/" else "$mainUrl/page/$page/"
+        val url = when {
+            isMovie -> if (page == 1) "$mainUrl/movie/" else "$mainUrl/movie/page/$page/"
+            isGenre -> "${request.data.replace("/page/", "")}/page/$page/"
+            else -> if (page == 1) "$mainUrl/" else "$mainUrl/page/$page/"
         }
+        
         val document = app.get(url).document
 
         val home = if (isMovie) {
@@ -38,10 +67,10 @@ class AnimeIndo : MainAPI() {
                 val poster = link.selectFirst("img")?.let { 
                     it.attr("data-original").ifBlank { it.attr("src") } 
                 }?.let { fixUrl(it) }
-                
+
                 val desc = table.selectFirst("td.videsc") ?: return@mapNotNull null
                 val title = desc.selectFirst("a[href]")?.text()?.trim() ?: return@mapNotNull null
-                
+
                 newMovieSearchResponse(title, fixUrl(href), TvType.Movie) {
                     this.posterUrl = poster
                 }
@@ -77,14 +106,13 @@ class AnimeIndo : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        // Fix: Menggunakan query standar WordPress ?s= karena search.php sering bermasalah
         val document = app.get("$mainUrl/?s=$query").document
-        
+
         return document.select("div.menu a[href], div.animemenu a[href], div.list-anime-parent a[href]").mapNotNull { a ->
             val inner = a.selectFirst("div.list-anime") ?: return@mapNotNull null
             val href = a.attr("href")
             val title = inner.selectFirst("p")?.text()?.trim() ?: return@mapNotNull null
-            
+
             val poster = inner.selectFirst("img")?.let { img ->
                 val dataOrg = img.attr("data-original")
                 if (dataOrg.isNotBlank()) dataOrg else img.attr("src")
@@ -118,7 +146,9 @@ class AnimeIndo : MainAPI() {
             ?.let { fixUrl(it) }
 
         val description = document.selectFirst("div.detail p, p.des, .entry-content p")?.text()?.trim()
-        val genres = document.select("div.detail li a, .genredesc a").map { it.text() }.filter { it.isNotBlank() }
+        
+        val rawGenres = document.select("div.detail li a, .genredesc a").map { it.text().trim() }.filter { it.isNotBlank() }
+        val mappedGenres = rawGenres.map { AnimeIndoTagCategory.getCategoryByTag(it) }.distinct()
 
         val episodes = document.select("div.ep a[href]").mapNotNull { a ->
             val href = a.attr("href")
@@ -137,7 +167,7 @@ class AnimeIndo : MainAPI() {
             backgroundPosterUrl = tracker?.cover
             addEpisodes(DubStatus.Subbed, episodes)
             plot = description
-            this.tags = genres
+            this.tags = mappedGenres
             addMalId(tracker?.malId)
             addAniListId(tracker?.aniId?.toIntOrNull())
         }
@@ -205,5 +235,27 @@ class AnimeIndo : MainAPI() {
         }
 
         return true
+    }
+}
+
+enum class AnimeIndoTagCategory(val title: String, val tagsList: List<String>) {
+    ACTION_ADVENTURE("Action & Adventure", listOf("Action", "Adventure", "Martial Arts", "Super Power", "Military")),
+    COMEDY("Comedy", listOf("Comedy", "Gag Humor", "Parody")),
+    DRAMA_ROMANCE("Drama & Romance", listOf("Drama", "Romance", "Boys Love", "Girls Love", "School")),
+    FANTASY_SCIFI("Fantasy & Sci-Fi", listOf("Fantasy", "Sci-Fi", "Supernatural", "Isekai", "Magic", "Demons", "Vampire", "Mecha", "Space", "Time Travel", "Reincarnation")),
+    MYSTERY_HORROR("Mystery & Horror", listOf("Mystery", "Thriller", "Suspense", "Detective", "Police", "Psychological", "Horror", "Gore")),
+    SLICE_OF_LIFE("Slice of Life", listOf("Slice of Life", "Iyashikei", "Kids", "Workplace")),
+    SPORTS_GAMES("Sports & Games", listOf("Sports", "Racing", "Strategy Game", "Game")),
+    ARTS_CULTURE("Arts & Music", listOf("Music", "Idol", "Historical", "Performing Arts")),
+    MATURE("Mature & Ecchi", listOf("Ecchi", "Harem", "Reverse Harem")),
+    DEMOGRAPHICS("Demographics", listOf("Shounen", "Shoujo", "Seinen", "Josei")),
+    OTHER("Other", listOf("Donghua"));
+
+    companion object {
+        fun getCategoryByTag(tag: String): String {
+            return entries.find { category ->
+                category.tagsList.any { it.equals(tag, ignoreCase = true) }
+            }?.title ?: tag
+        }
     }
 }
