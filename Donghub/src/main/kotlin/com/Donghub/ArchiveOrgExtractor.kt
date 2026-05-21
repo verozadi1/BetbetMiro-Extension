@@ -1,6 +1,5 @@
 package com.Donghub
 
-import com.lagradost.api.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 
@@ -15,19 +14,18 @@ class ArchiveOrgExtractor : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
-        Log.d("kraptor","url = $url")
+        if (url.isBlank()) return
 
-            callback.invoke(
-                newExtractorLink(
-                    source = name,
-                    name = name,
-                    url = url,
-                    type = INFER_TYPE,
-                    {
-                        this.referer = referer ?: mainUrl
-                        quality = Qualities.Unknown.value
-                    }
-                )
-            )
-        }
+        callback.invoke(
+            newExtractorLink(
+                name,
+                name,
+                url,
+                INFER_TYPE
+            ) {
+                this.referer = referer ?: mainUrl
+                this.quality = Qualities.Unknown.value
+            }
+        )
     }
+}
