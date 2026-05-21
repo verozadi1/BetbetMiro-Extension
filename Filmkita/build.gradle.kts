@@ -1,17 +1,24 @@
-version = 1
+version = 2
 
 cloudstream {
     description = "Filmkita"
     language = "id"
     authors = listOf("BetbetMiro")
 
+    /**
+     * Status int as the following:
+     * 0: Down
+     * 1: Ok
+     * 2: Slow
+     * 3: Beta only
+     */
     status = 1
+
     tvTypes = listOf(
-        "AsianDrama",
-        "TvSeries",
         "Movie",
+        "TvSeries",
+        "AsianDrama"
     )
 
-    iconUrl =
-        "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://s3.iix.llc&size=%size%"
+    iconUrl = "https://www.google.com/s2/favicons?domain=s7.iix.llc&sz=%size%"
 }

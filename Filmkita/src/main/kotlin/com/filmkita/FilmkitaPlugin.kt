@@ -8,18 +8,20 @@ import com.lagradost.cloudstream3.plugins.Plugin
 class FilmkitaPlugin : Plugin() {
     override fun load(context: Context) {
         registerMainAPI(Filmkita())
+
         registerExtractorAPI(Dingtezuni())
+        registerExtractorAPI(Dintezuvio())
         registerExtractorAPI(Bingezove())
         registerExtractorAPI(Mivalyo())
-        registerExtractorAPI(Hglink())
+        registerExtractorAPI(Minochinos())
+        registerExtractorAPI(Movearnpre())
         registerExtractorAPI(Ryderjet())
+
+        registerExtractorAPI(Hglink())
         registerExtractorAPI(Ghbrisk())
         registerExtractorAPI(Dhcplay())
         registerExtractorAPI(Winvids())
-        registerExtractorAPI(LayarwibuHls())
-        registerExtractorAPI(Movearnpre())
         registerExtractorAPI(Vidshare())
-        registerExtractorAPI(Dintezuvio())
-        registerExtractorAPI(Minochinos())
+        registerExtractorAPI(LayarwibuHls())
     }
 }

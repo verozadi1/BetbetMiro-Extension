@@ -50,28 +50,28 @@ open class Dingtezuni : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ) {
-        val headers =
-            mapOf(
-                "Sec-Fetch-Dest" to "empty",
-                "Sec-Fetch-Mode" to "cors",
-                "Sec-Fetch-Site" to "cross-site",
-                "Origin" to mainUrl,
-                "User-Agent" to USER_AGENT,
-            )
+        val headers = mapOf(
+            "Sec-Fetch-Dest" to "empty",
+            "Sec-Fetch-Mode" to "cors",
+            "Sec-Fetch-Site" to "cross-site",
+            "Origin" to mainUrl,
+            "User-Agent" to USER_AGENT,
+        )
 
-        val response = app.get(getEmbedUrl(url), referer = referer)
-        val script =
-            if (!getPacked(response.text).isNullOrEmpty()) {
-                var result = getAndUnpack(response.text)
-                if (result.contains("var links")) {
-                    result = result.substringAfter("var links")
-                }
-                result
-            } else {
-                response.document.selectFirst("script:containsData(sources:)")?.data()
-            } ?: return
+        val embedUrl = getEmbedUrl(url)
+        val response = app.get(embedUrl, referer = referer ?: mainUrl)
 
-        Regex(":\\s*\"(.*?m3u8.*?)\"").findAll(script).forEach { m3u8Match ->
+        val script = if (!getPacked(response.text).isNullOrEmpty()) {
+            var result = getAndUnpack(response.text)
+            if (result.contains("var links")) {
+                result = result.substringAfter("var links")
+            }
+            result
+        } else {
+            response.document.selectFirst("script:containsData(sources:)")?.data()
+        } ?: return
+
+        Regex(""":\s*["'](.*?m3u8.*?)["']""").findAll(script).forEach { m3u8Match ->
             generateM3u8(
                 name,
                 fixUrl(m3u8Match.groupValues[1]),
@@ -129,27 +129,25 @@ class LayarwibuHls : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ) {
-        val headers =
-            mapOf(
-                "Referer" to "$mainUrl/",
-                "Origin" to mainUrl,
-                "User-Agent" to USER_AGENT,
-            )
+        val headers = mapOf(
+            "Referer" to "$mainUrl/",
+            "Origin" to mainUrl,
+            "User-Agent" to USER_AGENT,
+        )
 
-        val streamUrl =
-            when {
-                url.contains("/player2/") -> {
-                    val encoded = url.substringAfterLast("/").substringBefore("?")
-                    runCatching {
-                            base64Decode(URLDecoder.decode(encoded, "UTF-8"))
-                                .trim()
-                                .takeIf { it.startsWith("http") }
-                        }
-                        .getOrNull()
-                }
-                url.contains(".m3u8") -> url
-                else -> null
-            } ?: return
+        val streamUrl = when {
+            url.contains("/player2/") -> {
+                val encoded = url.substringAfterLast("/").substringBefore("?")
+                runCatching {
+                    base64Decode(URLDecoder.decode(encoded, "UTF-8"))
+                        .trim()
+                        .takeIf { it.startsWith("http") }
+                }.getOrNull()
+            }
+
+            url.contains(".m3u8") -> url
+            else -> null
+        } ?: return
 
         generateM3u8(
             name,
@@ -171,28 +169,28 @@ open class Dintezuvio : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ) {
-        val headers =
-            mapOf(
-                "Sec-Fetch-Dest" to "empty",
-                "Sec-Fetch-Mode" to "cors",
-                "Sec-Fetch-Site" to "cross-site",
-                "Origin" to mainUrl,
-                "User-Agent" to USER_AGENT,
-            )
+        val headers = mapOf(
+            "Sec-Fetch-Dest" to "empty",
+            "Sec-Fetch-Mode" to "cors",
+            "Sec-Fetch-Site" to "cross-site",
+            "Origin" to mainUrl,
+            "User-Agent" to USER_AGENT,
+        )
 
-        val response = app.get(getEmbedUrl(url), referer = referer)
-        val script =
-            if (!getPacked(response.text).isNullOrEmpty()) {
-                var result = getAndUnpack(response.text)
-                if (result.contains("var links")) {
-                    result = result.substringAfter("var links")
-                }
-                result
-            } else {
-                response.document.selectFirst("script:containsData(sources:)")?.data()
-            } ?: return
+        val embedUrl = getEmbedUrl(url)
+        val response = app.get(embedUrl, referer = referer ?: mainUrl)
 
-        Regex(":\\s*\"(.*?m3u8.*?)\"").findAll(script).forEach { m3u8Match ->
+        val script = if (!getPacked(response.text).isNullOrEmpty()) {
+            var result = getAndUnpack(response.text)
+            if (result.contains("var links")) {
+                result = result.substringAfter("var links")
+            }
+            result
+        } else {
+            response.document.selectFirst("script:containsData(sources:)")?.data()
+        } ?: return
+
+        Regex(""":\s*["'](.*?m3u8.*?)["']""").findAll(script).forEach { m3u8Match ->
             generateM3u8(
                 name,
                 fixUrl(m3u8Match.groupValues[1]),
