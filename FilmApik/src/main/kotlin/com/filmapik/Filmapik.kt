@@ -20,6 +20,7 @@ import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
 
@@ -102,13 +103,17 @@ class Filmapik : MainAPI() {
             request.name,
             items,
             hasNext = document.selectFirst(
-                "a.next, a.nextpostslink, .pagination a:contains(Next), .pagination a.next"
+                "a.next, " +
+                    "a.nextpostslink, " +
+                    ".pagination a:contains(Next), " +
+                    ".pagination a.next"
             ) != null || items.isNotEmpty()
         )
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
         val q = URLEncoder.encode(query.trim(), "UTF-8")
+
         val endpoints = listOf(
             "$mainUrl/?s=$q",
             "$mainUrl?s=$q",
@@ -146,6 +151,7 @@ class Filmapik : MainAPI() {
                 "#info h2"
         )?.text()
             ?.cleanTitle()
+            ?.takeIf { it.isNotBlank() }
             ?: return null
 
         val poster = document.selectFirst(
@@ -172,13 +178,15 @@ class Filmapik : MainAPI() {
             .filter { it.isNotBlank() }
             .distinct()
 
-        val actors = document.select(".info-more span.tagline, .cast, .actors")
-            .firstOrNull {
-                it.text().contains("Actors", true) ||
-                    it.text().contains("Stars", true) ||
-                    it.text().contains("Cast", true)
-            }
-            ?.select("a")
+        val actors = document.select(
+            ".info-more span.tagline, " +
+                ".cast, " +
+                ".actors"
+        ).firstOrNull {
+            it.text().contains("Actors", true) ||
+                it.text().contains("Stars", true) ||
+                it.text().contains("Cast", true)
+        }?.select("a")
             ?.map { it.text().trim() }
             ?.filter { it.isNotBlank() }
             ?: emptyList()
@@ -195,7 +203,14 @@ class Filmapik : MainAPI() {
             ?.takeIf { it.isNotBlank() }
             ?: "Tidak ada deskripsi."
 
-        val pageText = document.selectFirst("#info, .sheader, .extra, .data")?.text().orEmpty()
+        val pageText = document.selectFirst(
+            "#info, " +
+                ".sheader, " +
+                ".extra, " +
+                ".data, " +
+                ".info-more"
+        )?.text().orEmpty()
+
         val year = Regex("""\b(19|20)\d{2}\b""")
             .find(pageText)
             ?.value
@@ -212,8 +227,11 @@ class Filmapik : MainAPI() {
             ?.let { Regex("""(\d+(\.\d+)?)""").find(it)?.groupValues?.getOrNull(1) }
             ?.toDoubleOrNull()
 
-        val duration = document.selectFirst("span.runtime, .runtime, .duration")
-            ?.text()
+        val duration = document.selectFirst(
+            "span.runtime, " +
+                ".runtime, " +
+                ".duration"
+        )?.text()
             ?.let { Regex("""(\d+)""").find(it)?.value }
             ?.toIntOrNull()
 
@@ -282,13 +300,15 @@ class Filmapik : MainAPI() {
                 ?.let { links.add(fixUrl(it)) }
         }
 
-        document.select("li.dooplay_player_option[data-url], .dooplay_player_option[data-url]")
-            .forEach { option ->
-                option.attr("data-url")
-                    .trim()
-                    .takeIf { it.isNotBlank() }
-                    ?.let { links.add(fixUrl(it)) }
-            }
+        document.select(
+            "li.dooplay_player_option[data-url], " +
+                ".dooplay_player_option[data-url]"
+        ).forEach { option ->
+            option.attr("data-url")
+                .trim()
+                .takeIf { it.isNotBlank() }
+                ?.let { links.add(fixUrl(it)) }
+        }
 
         document.select(
             "div#download a[href], " +
@@ -311,46 +331,62 @@ class Filmapik : MainAPI() {
         return links.isNotEmpty()
     }
 
-    private fun parseEpisodes(document: org.jsoup.nodes.Document): List<Episode> {
+    private fun parseEpisodes(document: Document): List<Episode> {
         val episodes = mutableListOf<Episode>()
 
-        val seasonBlocks = document.select("#seasons .se-c, .seasons .se-c")
+        val seasonBlocks = document.select(
+            "#seasons .se-c, " +
+                ".seasons .se-c"
+        )
 
         if (seasonBlocks.isNotEmpty()) {
             seasonBlocks.forEach { block ->
-                val seasonNumber = block.selectFirst(".se-q .se-t, .season-number")
-                    ?.text()
+                val seasonNumber = block.selectFirst(
+                    ".se-q .se-t, " +
+                        ".season-number"
+                )?.text()
                     ?.filter { it.isDigit() }
                     ?.toIntOrNull()
                     ?: 1
 
-                block.select(".se-a ul.episodios li a[href], ul.episodios li a[href]")
-                    .forEachIndexed { index, ep ->
-                        val epUrl = fixUrl(ep.attr("href"))
-                        val epName = ep.text().trim().ifBlank { "Episode ${index + 1}" }
-
-                        episodes.add(
-                            newEpisode(epUrl) {
-                                this.name = epName
-                                this.season = seasonNumber
-                                this.episode = index + 1
-                            }
-                        )
-                    }
-            }
-        } else {
-            document.select("ul.episodios li a[href], .episodios a[href], .episode-list a[href]")
-                .forEachIndexed { index, ep ->
+                block.select(
+                    ".se-a ul.episodios li a[href], " +
+                        "ul.episodios li a[href]"
+                ).forEachIndexed { index, ep ->
                     val epUrl = fixUrl(ep.attr("href"))
-                    val epName = ep.text().trim().ifBlank { "Episode ${index + 1}" }
+
+                    val epName = ep.text()
+                        .trim()
+                        .ifBlank { "Episode ${index + 1}" }
 
                     episodes.add(
                         newEpisode(epUrl) {
                             this.name = epName
+                            this.season = seasonNumber
                             this.episode = index + 1
                         }
                     )
                 }
+            }
+        } else {
+            document.select(
+                "ul.episodios li a[href], " +
+                    ".episodios a[href], " +
+                    ".episode-list a[href]"
+            ).forEachIndexed { index, ep ->
+                val epUrl = fixUrl(ep.attr("href"))
+
+                val epName = ep.text()
+                    .trim()
+                    .ifBlank { "Episode ${index + 1}" }
+
+                episodes.add(
+                    newEpisode(epUrl) {
+                        this.name = epName
+                        this.episode = index + 1
+                    }
+                )
+            }
         }
 
         return episodes.distinctBy { it.data }
@@ -397,7 +433,11 @@ class Filmapik : MainAPI() {
 
         val title = rawTitle.cleanTitle().ifBlank { return null }
 
-        val poster = selectFirst("img[src], img[data-src], img[data-lazy-src]")?.let { img ->
+        val poster = selectFirst(
+            "img[src], " +
+                "img[data-src], " +
+                "img[data-lazy-src]"
+        )?.let { img ->
             when {
                 img.hasAttr("data-src") -> img.attr("data-src")
                 img.hasAttr("data-lazy-src") -> img.attr("data-lazy-src")
@@ -406,18 +446,18 @@ class Filmapik : MainAPI() {
         }?.let { fixUrl(it) }
             ?.fixImageQuality()
 
-        val rating = selectFirst("div.rating, .imdb, .tmdb, .score")
-            ?.text()
+        val rating = selectFirst(
+            "div.rating, " +
+                ".imdb, " +
+                ".tmdb, " +
+                ".score"
+        )?.text()
             ?.replace(",", ".")
             ?.let { Regex("""(\d+(\.\d+)?)""").find(it)?.groupValues?.getOrNull(1) }
             ?.toDoubleOrNull()
 
-        val quality = selectFirst("span.quality, span.hd, span.q, .quality")
-            ?.text()
-            ?.trim()
-            ?.takeIf { it.isNotBlank() && !it.equals("N/A", true) }
-
         val typeText = text()
+
         val type = when {
             selectFirst("span.tvshows, span.tv, .tvshows, .tv-show") != null -> TvType.TvSeries
             href.contains("/tvshows/", true) -> TvType.TvSeries
@@ -435,7 +475,6 @@ class Filmapik : MainAPI() {
         } else {
             newMovieSearchResponse(title, fixUrl(href), TvType.Movie) {
                 this.posterUrl = poster
-                quality?.let { addQuality(it) }
                 rating?.let { this.score = Score.from10(it) }
             }
         }
@@ -443,7 +482,12 @@ class Filmapik : MainAPI() {
 
     private fun Element.toRecommendResult(): SearchResponse? {
         val anchor = selectFirst("a[href]") ?: return null
-        val image = selectFirst("img[src], img[data-src], img[data-lazy-src]")
+
+        val image = selectFirst(
+            "img[src], " +
+                "img[data-src], " +
+                "img[data-lazy-src]"
+        )
 
         val href = anchor.attr("href")
             .trim()
@@ -468,7 +512,11 @@ class Filmapik : MainAPI() {
         }?.let { fixUrl(it) }
             ?.fixImageQuality()
 
-        val type = if (href.contains("/tvshows/", true)) TvType.TvSeries else TvType.Movie
+        val type = if (href.contains("/tvshows/", true)) {
+            TvType.TvSeries
+        } else {
+            TvType.Movie
+        }
 
         return if (type == TvType.TvSeries) {
             newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
@@ -487,11 +535,19 @@ class Filmapik : MainAPI() {
         val response = app.get(url, allowRedirects = true)
         val document = response.document
 
-        document.selectFirst("iframe[src], embed[src]")?.attr("src")?.trim()?.let {
-            if (it.isNotBlank()) return resolveIframe(fixUrl(it), depth + 1)
-        }
+        document.selectFirst("iframe[src], embed[src]")
+            ?.attr("src")
+            ?.trim()
+            ?.let {
+                if (it.isNotBlank()) {
+                    return resolveIframe(fixUrl(it), depth + 1)
+                }
+            }
 
-        document.select("meta[http-equiv=refresh], meta[http-equiv=Refresh]").forEach { meta ->
+        document.select(
+            "meta[http-equiv=refresh], " +
+                "meta[http-equiv=Refresh]"
+        ).forEach { meta ->
             val refreshUrl = meta.attr("content")
                 .substringAfter("URL=", "")
                 .ifBlank { meta.attr("content").substringAfter("url=", "") }
@@ -503,6 +559,7 @@ class Filmapik : MainAPI() {
         }
 
         val scripts = document.select("script").html()
+
         val scriptPatterns = listOf(
             Regex("""location\.href\s*=\s*["']([^"']+)["']"""),
             Regex("""window\.location\s*=\s*["']([^"']+)["']"""),
@@ -513,6 +570,7 @@ class Filmapik : MainAPI() {
         for (regex in scriptPatterns) {
             val match = regex.find(scripts) ?: continue
             val scriptUrl = match.groupValues.getOrNull(1)?.trim().orEmpty()
+
             if (scriptUrl.isNotBlank() && scriptUrl.startsWith("http")) {
                 return resolveIframe(scriptUrl, depth + 1)
             }
@@ -533,12 +591,21 @@ class Filmapik : MainAPI() {
 
     private fun String?.fixImageQuality(): String? {
         if (this == null) return null
-        val match = Regex("""-\d*x\d*(?=\.)""").find(this)?.value
-        return if (match != null) this.replace(match, "") else this
+
+        val match = Regex("""-\d*x\d*(?=\.)""")
+            .find(this)
+            ?.value
+
+        return if (match != null) {
+            this.replace(match, "")
+        } else {
+            this
+        }
     }
 
     private fun fixUrl(url: String): String {
         val cleanUrl = url.trim()
+
         return when {
             cleanUrl.startsWith("http", true) -> cleanUrl
             cleanUrl.startsWith("//") -> "https:$cleanUrl"

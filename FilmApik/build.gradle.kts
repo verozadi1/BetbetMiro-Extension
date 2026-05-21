@@ -1,4 +1,4 @@
-version = 4
+version = 5
 
 cloudstream {
     description = "Filmapik"
@@ -17,9 +17,9 @@ cloudstream {
     tvTypes = listOf(
         "Movie",
         "TvSeries",
-        "AsianDrama",
         "Anime",
+        "AsianDrama"
     )
 
-    iconUrl = "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://filmapik.fitness&size=%size%"
+    iconUrl = "https://www.google.com/s2/favicons?domain=filmapik.fitness&sz=%size%"
 }

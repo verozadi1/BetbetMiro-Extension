@@ -27,11 +27,15 @@ class BuzzServer : ExtractorApi() {
     ) {
         try {
             val cleanUrl = url.trim().trimEnd('/')
-            val document = app.get(cleanUrl, referer = referer ?: mainUrl).documentLarge
 
-            val quality = document
-                .selectFirst("div.max-w-2xl > span, span:matchesOwn((?i)\\d{3,4}p)")
-                ?.text()
+            val qualityText = app.get(
+                cleanUrl,
+                referer = referer ?: mainUrl
+            ).documentLarge.selectFirst(
+                "div.max-w-2xl > span, span:matchesOwn((?i)\\d{3,4}p)"
+            )?.text()
+
+            val quality = qualityText
                 ?.replace(Regex("\\D"), "")
                 ?.toIntOrNull()
                 ?: 0
@@ -49,11 +53,10 @@ class BuzzServer : ExtractorApi() {
             if (redirectUrl.isNotBlank()) {
                 callback.invoke(
                     newExtractorLink(
-                        source = name,
-                        name = name,
-                        url = redirectUrl,
+                        name,
+                        name,
+                        redirectUrl
                     ) {
-                        this.referer = cleanUrl
                         this.quality = quality
                     }
                 )
