@@ -84,26 +84,44 @@ class Dramabox : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
-        val dramaId = extractDramaId(url) ?: throw ErrorLoadingException("ID DramaBox tidak ditemukan")
+        val openData = parseOpenData(url)
+        val dramaId = openData?.id?.trim()?.takeIf { it.isNotBlank() }
+            ?: extractDramaId(url)
+            ?: throw ErrorLoadingException("ID DramaBox tidak ditemukan")
 
-        val drama = fetchDramaDetail(dramaId) ?: throw ErrorLoadingException("Drama tidak ditemukan")
+        val apiDrama = fetchDramaDetail(dramaId)
+        val fallbackTitle = openData?.title?.trim()?.takeIf { it.isNotBlank() }
+        val fallbackPoster = openData?.coverImage?.trim()?.takeIf { it.isNotBlank() }
+
+        // Jangan langsung gagal "Drama tidak ditemukan" kalau endpoint detail sedang kosong.
+        // Data dari homepage/search tetap dipakai sebagai fallback supaya klik item tidak membuka URL 404.
+        val drama = apiDrama ?: DramaItem(
+            id = dramaId,
+            title = fallbackTitle ?: "DramaBox",
+            coverImage = fallbackPoster,
+            introduction = null,
+            tags = emptyList(),
+            episodeCount = null
+        )
+
         val episodeCount = drama.episodeCount ?: inferEpisodeCount(dramaId)
         if (episodeCount <= 0) throw ErrorLoadingException("Episode tidak ditemukan")
 
-        val cleanName = cleanTitle(drama.title ?: "DramaBox")
+        val cleanName = cleanTitle(drama.title ?: fallbackTitle ?: "DramaBox").ifBlank { "DramaBox" }
+        val poster = drama.coverImage?.takeIf { it.isNotBlank() } ?: fallbackPoster
         val episodes = (1..episodeCount).map { ep ->
             newEpisode(LoadData(bookId = dramaId, episodeNo = ep).toJson()) {
                 this.name = "Episode $ep"
                 this.episode = ep
-                this.posterUrl = drama.coverImage
+                this.posterUrl = poster
             }
         }
 
         return newTvSeriesLoadResponse(cleanName, buildDramaWebUrl(cleanName, dramaId), TvType.AsianDrama, episodes) {
-            this.posterUrl = drama.coverImage
+            this.posterUrl = poster
             this.plot = drama.introduction
             this.tags = drama.tags?.mapNotNull { it.trim().takeIf { tag -> tag.isNotBlank() } }?.distinct()
-            this.recommendations = fetchRelatedRecommendations(drama)
+            this.recommendations = if (apiDrama != null) fetchRelatedRecommendations(drama) else emptyList()
         }
     }
 
@@ -153,7 +171,15 @@ class Dramabox : MainAPI() {
             .replace(Regex("\\s{2,}"), " ")
             .trim()
 
+    private fun parseOpenData(raw: String): DramaOpenData? {
+        return runCatching { parseJson<DramaOpenData>(raw) }.getOrNull()
+    }
+
     private fun extractDramaId(url: String): String? {
+        // JSON internal data dari SearchResponse.
+        parseOpenData(url)?.id?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+
+        // URL resmi: /drama/title_4200003486
         val fromUnderscore = url.substringAfterLast("_", "")
             .substringBefore("?")
             .substringBefore("&")
@@ -162,6 +188,7 @@ class Dramabox : MainAPI() {
 
         if (fromUnderscore != null) return fromUnderscore
 
+        // Fallback untuk URL/data yang cuma berisi angka.
         return Regex("""\d{6,}""")
             .find(url)
             ?.value
@@ -172,10 +199,12 @@ class Dramabox : MainAPI() {
         val slug = title
             ?.let(::cleanTitle)
             ?.lowercase()
+            ?.replace(Regex("""['’`]+"""), "")
+            ?.replace(Regex("""&"""), " and ")
             ?.replace(Regex("""[^a-z0-9]+"""), "-")
             ?.trim('-')
-            ?.takeIf { it.isNotBlank() }
-            ?: "drama"
+            ?.takeIf { it.isNotBlank() && it != "_" }
+            ?: "dramabox"
 
         return "$mainUrl/drama/${slug}_$dramaId"
     }
@@ -184,7 +213,17 @@ class Dramabox : MainAPI() {
         val dramaId = id?.trim()?.takeIf { it.isNotBlank() } ?: return null
         val cleanName = cleanTitle(title ?: "DramaBox").ifBlank { "DramaBox" }
 
-        return newTvSeriesSearchResponse(cleanName, buildDramaWebUrl(cleanName, dramaId), TvType.AsianDrama) {
+        // Penting:
+        // Jangan pakai URL web sebagai data SearchResponse.
+        // Kalau URL web salah/slug kosong, Cloudstream bisa menampilkan halaman DramaBox 404.
+        // Kita simpan JSON internal, lalu load() membangun URL resmi setelah detail/fallback tersedia.
+        val internalData = DramaOpenData(
+            id = dramaId,
+            title = cleanName,
+            coverImage = coverImage
+        ).toJson()
+
+        return newTvSeriesSearchResponse(cleanName, internalData, TvType.AsianDrama) {
             this.posterUrl = coverImage
         }
     }
@@ -340,6 +379,12 @@ class Dramabox : MainAPI() {
     data class StreamItem(
         @JsonProperty("quality") val quality: Int? = null,
         @JsonProperty("url") val url: String? = null
+    )
+
+    data class DramaOpenData(
+        @JsonProperty("id") val id: String? = null,
+        @JsonProperty("title") val title: String? = null,
+        @JsonProperty("coverImage") val coverImage: String? = null
     )
 
     data class LoadData(
