@@ -118,14 +118,11 @@ class DailymotionProvider : MainAPI() {
     ): Boolean {
         if (data.isBlank()) return false
 
-        return runCatching {
-            loadExtractor(
-                data = data,
-                referer = "$mainUrl/",
-                subtitleCallback = subtitleCallback,
-                callback = callback
-            )
-        }.getOrDefault(false)
+        return try {
+            loadExtractor(data, "$mainUrl/", subtitleCallback, callback)
+        } catch (_: Throwable) {
+            false
+        }
     }
 
     private fun buildVideoListUrl(query: String, page: Int, limit: Int): String {
@@ -143,7 +140,7 @@ class DailymotionProvider : MainAPI() {
         }
     }
 
-    private fun VideoDetailResponse.toLoadResponse(): LoadResponse {
+    private suspend fun VideoDetailResponse.toLoadResponse(): LoadResponse {
         val videoId = id?.takeIf { it.isNotBlank() }
             ?: throw ErrorLoadingException("ID video Dailymotion kosong")
         val watchUrl = "$mainUrl/video/$videoId"
