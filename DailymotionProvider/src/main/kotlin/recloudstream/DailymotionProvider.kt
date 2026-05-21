@@ -10,7 +10,7 @@ import java.net.URLEncoder
 class DailymotionProvider : MainAPI() {
 
     override var mainUrl = "https://www.dailymotion.com"
-    override var name = "Dailymotion 📺"
+    override var name = "Dailymotion"
     override val hasMainPage = true
     override val hasQuickSearch = true
     override var lang = "id"
