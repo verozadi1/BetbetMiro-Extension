@@ -16,7 +16,7 @@ open class Donghuastream : MainAPI() {
     }
 
     override var mainUrl = "https://donghuastream.org"
-    override var name = "Donghuastream"
+    override var name = "Donghuastream."
     override val hasMainPage = true
     override val hasQuickSearch = true
     override var lang = "id"
@@ -433,23 +433,23 @@ open class Donghuastream : MainAPI() {
     }
 
     private fun buildPagedUrl(rawUrl: String, page: Int): String {
-        return if (rawUrl.contains("{page}")) {
-            if (page <= 1) {
-                rawUrl
-                    .replace(Regex("""/?page/\{page}/?"""), "/")
-                    .replace("page={page}", "page=1")
-                    .replace(Regex("""//+$"""), "/")
-            } else {
-                rawUrl.replace("{page}", page.toString())
-            }
-        } else if (page <= 1) {
-            rawUrl
-        } else {
+        if (!rawUrl.contains("{page}")) {
+            if (page <= 1) return rawUrl
+
             val clean = rawUrl.trimEnd('/')
-            when {
+            return when {
                 clean.contains("?") -> "$clean&page=$page"
                 else -> "$clean/page/$page/"
             }
+        }
+
+        return if (page <= 1) {
+            rawUrl
+                .replace("/page/{page}/", "/")
+                .replace("/page/{page}", "/")
+                .replace("page={page}", "page=1")
+        } else {
+            rawUrl.replace("{page}", page.toString())
         }
     }
 
