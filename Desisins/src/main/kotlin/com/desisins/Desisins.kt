@@ -3,8 +3,6 @@ package com.desisins
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.fixUrl
-import com.lagradost.cloudstream3.utils.fixUrlNull
 import com.lagradost.cloudstream3.utils.loadExtractor
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
@@ -171,7 +169,7 @@ class Desisins : MainAPI() {
                     else -> it.attr("data-src").ifBlank { _ -> it.attr("src") }
                 }
             }
-            ?.let { fixUrlNull(it, url) }
+            ?.let { absoluteUrlOrNull(it, url) }
 
         val description = document.selectFirst("meta[property=og:description], meta[name=description], div.g1-meta, .entry-summary")
             ?.let {
@@ -221,7 +219,7 @@ class Desisins : MainAPI() {
                 val raw = element.attr("src")
                     .ifBlank { element.attr("data-src") }
                     .ifBlank { element.attr("href") }
-                raw.takeIf { it.isNotBlank() }?.let { fixUrl(it, data) }
+                raw.takeIf { it.isNotBlank() }?.let { absoluteUrl(it, data) }
             }
 
         Regex("""https?://[^"'\\\s<>]+(?:lulustream|lulu|stream|embed)[^"'\\\s<>]+""", RegexOption.IGNORE_CASE)
@@ -238,6 +236,28 @@ class Desisins : MainAPI() {
         }
 
         return found || candidates.isNotEmpty()
+    }
+
+    private fun absoluteUrl(rawUrl: String, baseUrl: String = mainUrl): String {
+        val value = rawUrl.trim().replace("\\/", "/").replace("&amp;", "&")
+        if (value.startsWith("http://") || value.startsWith("https://")) return value
+        if (value.startsWith("//")) return "https:$value"
+
+        val base = when {
+            baseUrl.startsWith("http://") || baseUrl.startsWith("https://") -> baseUrl.trimEnd('/')
+            else -> mainUrl.trimEnd('/')
+        }
+
+        val domain = Regex("""^(https?://[^/]+)""").find(base)?.groupValues?.getOrNull(1) ?: mainUrl.trimEnd('/')
+        return if (value.startsWith('/')) {
+            "$domain$value"
+        } else {
+            "$domain/$value"
+        }
+    }
+
+    private fun absoluteUrlOrNull(rawUrl: String?, baseUrl: String = mainUrl): String? {
+        return rawUrl?.takeIf { it.isNotBlank() }?.let { absoluteUrl(it, baseUrl) }
     }
 
     private fun buildPagedUrl(rawUrl: String, page: Int): String {
@@ -258,7 +278,7 @@ class Desisins : MainAPI() {
 
     private fun Element.toSearchResultFromAnchor(container: Element = this): SearchResponse? {
         val href = attr("href").ifBlank { selectFirst("a[href]")?.attr("href").orEmpty() }
-        val fixedHref = fixUrlNull(href, mainUrl) ?: return null
+        val fixedHref = absoluteUrlOrNull(href, mainUrl) ?: return null
 
         if (!fixedHref.contains("desisins.com", true)) return null
         if (fixedHref.contains("/category/", true) || fixedHref.contains("/tag/", true)) return null
@@ -274,7 +294,7 @@ class Desisins : MainAPI() {
             ?.ifBlank { image.attr("data-lazy-src") }
             ?.ifBlank { image.attr("src") }
             ?.ifBlank { image.attr("data-original") }
-            ?.let { fixUrlNull(it, fixedHref) }
+            ?.let { absoluteUrlOrNull(it, fixedHref) }
 
         return newMovieSearchResponse(title, fixedHref, TvType.NSFW) {
             this.posterUrl = poster
