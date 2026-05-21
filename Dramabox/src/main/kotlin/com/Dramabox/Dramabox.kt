@@ -84,8 +84,7 @@ class Dramabox : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
-        val dramaId = url.substringAfterLast("_").substringBefore("?").trim()
-        if (dramaId.isBlank()) throw ErrorLoadingException("ID DramaBox tidak ditemukan")
+        val dramaId = extractDramaId(url) ?: throw ErrorLoadingException("ID DramaBox tidak ditemukan")
 
         val drama = fetchDramaDetail(dramaId) ?: throw ErrorLoadingException("Drama tidak ditemukan")
         val episodeCount = drama.episodeCount ?: inferEpisodeCount(dramaId)
@@ -100,7 +99,7 @@ class Dramabox : MainAPI() {
             }
         }
 
-        return newTvSeriesLoadResponse(cleanName, "$mainUrl/drama/_$dramaId", TvType.AsianDrama, episodes) {
+        return newTvSeriesLoadResponse(cleanName, buildDramaWebUrl(cleanName, dramaId), TvType.AsianDrama, episodes) {
             this.posterUrl = drama.coverImage
             this.plot = drama.introduction
             this.tags = drama.tags?.mapNotNull { it.trim().takeIf { tag -> tag.isNotBlank() } }?.distinct()
@@ -154,11 +153,38 @@ class Dramabox : MainAPI() {
             .replace(Regex("\\s{2,}"), " ")
             .trim()
 
+    private fun extractDramaId(url: String): String? {
+        val fromUnderscore = url.substringAfterLast("_", "")
+            .substringBefore("?")
+            .substringBefore("&")
+            .trim()
+            .takeIf { it.isNotBlank() && it.any { char -> char.isDigit() } }
+
+        if (fromUnderscore != null) return fromUnderscore
+
+        return Regex("""\d{6,}""")
+            .find(url)
+            ?.value
+            ?.takeIf { it.isNotBlank() }
+    }
+
+    private fun buildDramaWebUrl(title: String?, dramaId: String): String {
+        val slug = title
+            ?.let(::cleanTitle)
+            ?.lowercase()
+            ?.replace(Regex("""[^a-z0-9]+"""), "-")
+            ?.trim('-')
+            ?.takeIf { it.isNotBlank() }
+            ?: "drama"
+
+        return "$mainUrl/drama/${slug}_$dramaId"
+    }
+
     private fun DramaItem.toSearchResult(): SearchResponse? {
         val dramaId = id?.trim()?.takeIf { it.isNotBlank() } ?: return null
         val cleanName = cleanTitle(title ?: "DramaBox").ifBlank { "DramaBox" }
 
-        return newTvSeriesSearchResponse(cleanName, "$mainUrl/drama/_$dramaId", TvType.AsianDrama) {
+        return newTvSeriesSearchResponse(cleanName, buildDramaWebUrl(cleanName, dramaId), TvType.AsianDrama) {
             this.posterUrl = coverImage
         }
     }
