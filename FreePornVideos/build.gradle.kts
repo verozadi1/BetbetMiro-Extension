@@ -1,8 +1,8 @@
-version = 5
+version = 6
 
 cloudstream {
-    authors     = listOf("BetbetMiro")
-    language    = "id"
+    authors = listOf("BetbetMiro")
+    language = "id"
     description = "Premium porn with 4K support"
 
     /**
@@ -11,8 +11,10 @@ cloudstream {
      * 1: Ok
      * 2: Slow
      * 3: Beta only
-    **/
-    status  = 1 // will be 3 if unspecified
+     */
+    status = 1
+
     tvTypes = listOf("NSFW")
+
     iconUrl = "https://www.google.com/s2/favicons?domain=freepornvideos.xxx&sz=%size%"
 }
