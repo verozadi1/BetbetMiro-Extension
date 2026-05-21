@@ -166,7 +166,7 @@ class Desisins : MainAPI() {
             ?.let {
                 when (it.tagName()) {
                     "meta" -> it.attr("content")
-                    else -> it.attr("data-src").ifBlank { _ -> it.attr("src") }
+                    else -> it.attr("data-src").ifBlank { it.attr("src") }
                 }
             }
             ?.let { absoluteUrlOrNull(it, url) }
