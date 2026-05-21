@@ -1,4 +1,4 @@
-version = 2
+version = 3
 
 android {
     buildFeatures {
@@ -24,7 +24,7 @@ android {
 }
 
 cloudstream {
-    description = "Drakor.id"
+    description = "Drakor.id - drama Asia subtitle Indonesia."
     language = "id"
     authors = listOf("BetbetMiro")
 

@@ -1,6 +1,7 @@
 package com.drakorid
 
 import com.excloud.BuildConfig
+import com.lagradost.cloudstream3.ErrorLoadingException
 import com.lagradost.cloudstream3.HomePageList
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
@@ -35,6 +36,7 @@ class DrakoridProvider : MainAPI() {
     override var name = "Drakor.id"
     override var lang = "id"
     override val hasMainPage = true
+    override val hasQuickSearch = true
     override val supportedTypes = setOf(TvType.AsianDrama, TvType.TvSeries, TvType.Movie)
 
     private val cookieHeader = BuildConfig.DRAKORID_COOKIE.trim().takeIf { it.isNotBlank() }
@@ -62,15 +64,40 @@ class DrakoridProvider : MainAPI() {
 
     override val mainPage = mainPageOf(
         "list" to "Terbaru",
+        "ongoing" to "Ongoing",
         "kategori/drama-korea" to "Drama Korea",
         "kategori/drama-china" to "Drama China",
-        "kategori/variety-show" to "Variety Show",
+        "kategori/drama-thailand" to "Drama Thailand",
         "kategori/film-korea" to "Film Korea",
+        "kategori/film-thailand" to "Film Thailand",
+        "kategori/film-china" to "Film China",
+        "kategori/variety-show" to "Variety Show",
+
+        "kategori/romance" to "Romance",
+        "kategori/comedy" to "Comedy",
+        "kategori/action" to "Action",
+        "kategori/fantasy" to "Fantasy",
+        "kategori/horror" to "Horror",
+        "kategori/thriller" to "Thriller",
+        "kategori/adventure" to "Adventure",
+        "kategori/school" to "School",
+        "kategori/melodrama" to "Melodrama",
+        "kategori/web-drama" to "Web Drama",
+        "kategori/time-travel" to "Time Travel",
+        "kategori/historical" to "Historical",
+        "kategori/sport" to "Sport",
+        "kategori/politic" to "Politic",
+        "kategori/running-man" to "Running Man",
+        "kategori/mystery" to "Mystery",
+        "kategori/crime" to "Crime",
+        "kategori/legal" to "Legal",
+        "kategori/documentary" to "Documentary",
+        "kategori/family" to "Family"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val pageNo = if (page <= 0) 1 else page
-        val url = "$mainUrl/${request.data}/$pageNo"
+        val url = buildPageUrl(request.data, pageNo)
         val document = app.get(
             url,
             headers = baseHeaders,
@@ -82,9 +109,10 @@ class DrakoridProvider : MainAPI() {
             .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
 
+        val hasNext = document.select("a[href*='/${pageNo + 1}'], a[href*='/page/${pageNo + 1}/'], .pagination a, a.next").isNotEmpty()
         return newHomePageResponse(
             HomePageList(request.name, items),
-            hasNext = items.isNotEmpty()
+            hasNext = hasNext || items.isNotEmpty()
         )
     }
 
@@ -112,8 +140,15 @@ class DrakoridProvider : MainAPI() {
             referer = mainUrl
         ).document
 
-        val title = document.selectFirst("h3.title")?.text()?.trim().orEmpty()
-        val poster = document.selectFirst("div.product-detail-header center img")?.attr("abs:src")
+        val title = document.selectFirst("h3.title, h1, meta[property=og:title]")
+            ?.let { it.attr("content").ifBlank { it.text() } }
+            ?.cleanTitle()
+            ?.takeIf { it.isNotBlank() }
+            ?: throw ErrorLoadingException("Judul Drakor.id tidak ditemukan")
+
+        val poster = document.selectFirst("div.product-detail-header center img, meta[property=og:image], img[src*='image'], img[src*='poster']")
+            ?.let { it.attr("abs:src").ifBlank { it.attr("content") } }
+            ?.takeIf { it.isNotBlank() }
         val tags = document.select("#kategoriMe .chip-label")
             .map { it.text().trim() }
             .filter { it.isNotBlank() }
@@ -277,7 +312,12 @@ class DrakoridProvider : MainAPI() {
 
         val poster = this.selectFirst("img")?.attr("abs:src")?.trim()
 
-        val isMovie = href.contains("/film", ignoreCase = true)
+        val cardText = text()
+        val isMovie = href.contains("/film", ignoreCase = true) ||
+            cardText.contains("Film Korea", ignoreCase = true) ||
+            cardText.contains("Film China", ignoreCase = true) ||
+            cardText.contains("Film Thailand", ignoreCase = true) ||
+            title.contains("Movie", ignoreCase = true)
 
         return if (isMovie) {
             newMovieSearchResponse(title, href, TvType.Movie) {
@@ -287,6 +327,17 @@ class DrakoridProvider : MainAPI() {
             newTvSeriesSearchResponse(title, href, TvType.AsianDrama) {
                 this.posterUrl = poster
             }
+        }
+    }
+
+    private fun buildPageUrl(path: String, page: Int): String {
+        val clean = path.trim().trim('/')
+        return when {
+            clean.startsWith("http://", true) || clean.startsWith("https://", true) -> {
+                "${clean.trimEnd('/')}/$page"
+            }
+            clean.isBlank() -> "$mainUrl/list/$page"
+            else -> "$mainUrl/$clean/$page"
         }
     }
 
