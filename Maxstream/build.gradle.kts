@@ -1,12 +1,23 @@
-package com.maxstream
+version = 1
 
-import android.content.Context
-import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
-import com.lagradost.cloudstream3.plugins.Plugin
+cloudstream {
+    authors = listOf("BetbetMiro")
+    language = "id"
+    description = "Provider CloudStream untuk MAXStream TV. Mendukung halaman publik MAXStream tanpa bypass login atau DRM."
 
-@CloudstreamPlugin
-class MaxstreamPlugin : Plugin() {
-    override fun load(context: Context) {
-        registerMainAPI(Maxstream())
-    }
+    /**
+     * Status int as the following:
+     * 0: Down
+     * 1: Ok
+     * 2: Slow
+     * 3: Beta only
+     */
+    status = 3
+
+    tvTypes = listOf(
+        "Movie",
+        "TvSeries"
+    )
+
+    iconUrl = "https://www.google.com/s2/favicons?domain=maxstream.tv&sz=%size%"
 }
