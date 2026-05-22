@@ -8,8 +8,8 @@ import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
-import com.lagradost.cloudstream3.VPNStatus
 import com.lagradost.cloudstream3.USER_AGENT
+import com.lagradost.cloudstream3.VPNStatus
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.fixUrl
 import com.lagradost.cloudstream3.fixUrlNull
@@ -41,6 +41,7 @@ class Happy2hub : MainAPI() {
 
     override val mainPage = mainPageOf(
         "" to "Terbaru",
+
         "ullu-a" to "Ullu",
         "tag/primeplay-watch-online" to "Primeplay",
         "tag/altt-watch-online" to "Altt",
@@ -54,9 +55,9 @@ class Happy2hub : MainAPI() {
         "tag/mojflix-watch-online" to "Mojflix",
         "tag/mangoflix-watch-online" to "Mangoflix",
         "tag/hothit-watch-online" to "Hothit",
-        "tag/18" to "All Videos",
         "tag/brazzersexxtra" to "Brazzer",
         "tag/porn" to "All Porn",
+        "tag/18" to "All Videos",
 
         "category/web-series" to "Web Series",
         "category/movies" to "Movies",
@@ -75,11 +76,13 @@ class Happy2hub : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
-        val url = buildPageUrl(request.data, page)
-        val document = app.get(url, headers = headers, timeout = 30L).document
+        val document = app.get(
+            buildPageUrl(request.data, page),
+            headers = headers,
+            timeout = 30L
+        ).document
 
-        val home = parseCards(document)
-            .distinctBy { it.url }
+        val home = parseHomeCards(document)
 
         return newHomePageResponse(
             request.name,
@@ -94,10 +97,7 @@ class Happy2hub : MainAPI() {
         )
     }
 
-    private fun buildPageUrl(
-        path: String,
-        page: Int
-    ): String {
+    private fun buildPageUrl(path: String, page: Int): String {
         val cleanPath = path.trim('/')
 
         return when {
@@ -108,19 +108,12 @@ class Happy2hub : MainAPI() {
         }
     }
 
-    private fun parseCards(document: Document): List<SearchResponse> {
+    private fun parseHomeCards(document: Document): List<SearchResponse> {
         val results = linkedMapOf<String, SearchResponse>()
 
-        document.select(
-            "div.content-wrap > div > div > div, " +
-                "article, " +
-                ".post, " +
-                ".item, " +
-                ".entry, " +
-                ".thumbnail, " +
-                ".blog-post, " +
-                "a[href]"
-        ).forEach { element ->
+        // Selector lama dipertahankan karena ini yang sebelumnya normal:
+        // gambar muncul, judul benar, dan kartu tidak tercampur menu/header.
+        document.select("div.content-wrap > div > div > div").forEach { element ->
             element.toSearchResult()?.let { item ->
                 results[item.url] = item
             }
@@ -130,20 +123,10 @@ class Happy2hub : MainAPI() {
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val anchor = if (this.`is`("a[href]")) {
-            this
-        } else {
-            selectFirst(
-                "h4 a[href], " +
-                    "h3 a[href], " +
-                    "h2 a[href], " +
-                    ".entry-title a[href], " +
-                    "a[href]"
-            ) ?: return null
-        }
+        val anchor = selectFirst("h4 a[href], h3 a[href], h2 a[href]")
+            ?: return null
 
         val href = fixUrlNull(anchor.attr("href")) ?: return null
-
         if (!href.startsWith(mainUrl)) return null
         if (isBlockedUrl(href)) return null
 
@@ -151,23 +134,17 @@ class Happy2hub : MainAPI() {
             selectFirst("h4 a")?.text()?.trim(),
             selectFirst("h3 a")?.text()?.trim(),
             selectFirst("h2 a")?.text()?.trim(),
-            selectFirst(".entry-title")?.text()?.trim(),
             anchor.attr("title").trim(),
-            selectFirst("img[alt]")?.attr("alt")?.trim(),
-            anchor.text().trim()
-        ).firstOrNull {
-            !it.isNullOrBlank() &&
-                !it.equals("Home", true) &&
-                !it.equals("Next", true) &&
-                !it.equals("Previous", true) &&
-                !it.equals("Search", true)
-        }?.cleanTitle()
+            selectFirst("a img[alt]")?.attr("alt")?.trim()
+        ).firstOrNull { !it.isNullOrBlank() }
+            ?.cleanTitle()
             ?: return null
 
         if (title.length < 3) return null
 
         val poster = fixUrlNull(
-            selectFirst("img")?.getImageAttr()
+            selectFirst("a img")?.getImageAttr()
+                ?: selectFirst("img")?.getImageAttr()
         )
 
         return newMovieSearchResponse(
@@ -181,7 +158,6 @@ class Happy2hub : MainAPI() {
 
     private fun isBlockedUrl(url: String): Boolean {
         val path = url.substringAfter(mainUrl).trim('/').lowercase()
-
         if (path.isBlank()) return true
 
         val blockedPrefixes = listOf(
@@ -196,7 +172,9 @@ class Happy2hub : MainAPI() {
             "about"
         )
 
-        return blockedPrefixes.any { path == it.trimEnd('/') || path.startsWith(it) }
+        return blockedPrefixes.any {
+            path == it.trimEnd('/') || path.startsWith(it)
+        }
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
@@ -217,8 +195,7 @@ class Happy2hub : MainAPI() {
                 app.get(url, headers = headers, timeout = 30L).document
             }.getOrNull() ?: break
 
-            val pageResults = parseCards(document)
-
+            val pageResults = parseHomeCards(document)
             if (pageResults.isEmpty()) break
 
             pageResults.forEach { item ->
@@ -246,47 +223,28 @@ class Happy2hub : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(url, headers = headers, timeout = 30L).document
 
-        val title = document.selectFirst(
-            "meta[property=og:title], " +
-                "h1.entry-title, " +
-                "h1, " +
-                ".entry-title"
-        )?.let { element ->
-            when {
-                element.hasAttr("content") -> element.attr("content")
-                else -> element.text()
-            }
-        }?.cleanTitle()
+        val title = document.selectFirst("meta[property=og:title]")
+            ?.attr("content")
+            ?.trim()
+            ?.cleanTitle()
             ?.takeIf { it.isNotBlank() }
+            ?: document.selectFirst("h1.entry-title, h1")
+                ?.text()
+                ?.trim()
+                ?.cleanTitle()
             ?: url.substringAfterLast("/").replace("-", " ").cleanTitle()
 
         val poster = fixUrlNull(
-            document.selectFirst(
-                "meta[property=og:image], " +
-                    "img.wp-post-image, " +
-                    ".entry-content img, " +
-                    "article img, " +
-                    "img"
-            )?.let { element ->
-                when {
-                    element.hasAttr("content") -> element.attr("content")
-                    else -> element.getImageAttr()
-                }
-            }
+            document.selectFirst("meta[property=og:image]")?.attr("content")
+                ?: document.selectFirst("img.wp-post-image, .entry-content img, article img, img")?.getImageAttr()
         )
 
-        val description = document.selectFirst(
-            "meta[property=og:description], " +
-                ".entry-content p, " +
-                ".entry-content, " +
-                "article"
-        )?.let { element ->
-            when {
-                element.hasAttr("content") -> element.attr("content")
-                else -> element.text()
-            }
-        }?.trim()
-            ?.takeIf { it.isNotBlank() }
+        val description = document.selectFirst("meta[property=og:description]")
+            ?.attr("content")
+            ?.trim()
+            ?: document.selectFirst(".entry-content p, .entry-content, article")
+                ?.text()
+                ?.trim()
 
         val tags = document.select(
             "a[href*='/tag/'], " +
@@ -308,7 +266,7 @@ class Happy2hub : MainAPI() {
             posterUrl = poster
             plot = description
             this.tags = tags
-            recommendations = parseCards(document)
+            recommendations = parseHomeCards(document)
                 .filter { it.url != url }
                 .distinctBy { it.url }
         }
@@ -316,100 +274,141 @@ class Happy2hub : MainAPI() {
 
     private suspend fun parseEpisodes(
         document: Document,
-        url: String,
+        pageUrl: String,
         poster: String?
     ): List<Episode> {
-        val episodes = linkedMapOf<String, Episode>()
+        val allEpisodes = linkedMapOf<String, Episode>()
 
-        val externalPage = document.select(
+        val sourceDocuments = mutableListOf<Document>()
+        sourceDocuments.add(document)
+
+        // Happy2hub sering mengarah dulu ke halaman external/perantara.
+        // Kita ambil beberapa kandidat, bukan cuma link pertama.
+        document.select(
             "div.entry-content.clearfix p a[href], " +
                 ".entry-content p a[href], " +
-                "article p a[href]"
-        ).firstOrNull { element ->
-            val href = element.attr("href")
-            href.isNotBlank() && !href.contains(mainUrl)
-        }?.attr("href")?.trim()
+                "article p a[href], " +
+                "a[href*='watch'], " +
+                "a[href*='download'], " +
+                "a[href*='episode']"
+        ).mapNotNull { element ->
+            element.attr("href").trim().takeIf { it.isNotBlank() }
+        }.distinct()
+            .take(8)
+            .forEach { href ->
+                val fixed = fixUrl(href)
 
-        val sourceDocument = if (!externalPage.isNullOrBlank()) {
-            runCatching {
-                app.get(externalPage, headers = headers, referer = url, timeout = 30L).document
-            }.getOrDefault(document)
-        } else {
-            document
-        }
+                // External page atau playable link langsung.
+                if (!fixed.contains(mainUrl, ignoreCase = true) || isPlayableUrl(fixed)) {
+                    val externalDoc = runCatching {
+                        app.get(
+                            fixed,
+                            headers = headers,
+                            referer = pageUrl,
+                            timeout = 30L
+                        ).document
+                    }.getOrNull()
 
-        sourceDocument.select(
-            "div.entry-content.clearfix h4:contains(Episode), " +
-                "div.entry-content.clearfix h5:contains(Episode), " +
-                ".entry-content h4:contains(Episode), " +
-                ".entry-content h5:contains(Episode), " +
-                "h4:contains(Episode), " +
-                "h5:contains(Episode)"
-        ).forEachIndexed { index, episodeHeader ->
-            val epText = episodeHeader.text().trim()
-            val epNum = extractEpisodeNumber(epText) ?: index + 1
-            val episodeLinks = linkedSetOf<String>()
-
-            var nextElement = episodeHeader.nextElementSibling()
-
-            while (nextElement != null) {
-                val tag = nextElement.tagName().lowercase()
-
-                if (
-                    tag == "h4" ||
-                    tag == "h5" ||
-                    nextElement.text().contains("Episode", ignoreCase = true)
-                ) {
-                    break
-                }
-
-                nextElement.select("a[href]").forEach { linkElement ->
-                    val link = linkElement.attr("href").trim()
-
-                    if (link.isNotBlank()) {
-                        episodeLinks.add(link)
+                    if (externalDoc != null) {
+                        sourceDocuments.add(externalDoc)
                     }
                 }
-
-                nextElement = nextElement.nextElementSibling()
             }
 
-            if (episodeLinks.isNotEmpty()) {
-                episodes["Episode $epNum"] = newEpisode(
-                    episodeLinks.joinToString(",")
-                ) {
-                    name = "Episode $epNum"
-                    episode = epNum
-                    posterUrl = poster
+        sourceDocuments.forEach { sourceDocument ->
+            parseEpisodeBlocks(sourceDocument, poster).forEach { episode ->
+                allEpisodes[episode.data] = episode
+            }
+        }
+
+        if (allEpisodes.isEmpty()) {
+            sourceDocuments.forEach { sourceDocument ->
+                val playableLinks = collectPlayableLinks(sourceDocument)
+
+                if (playableLinks.isNotEmpty()) {
+                    allEpisodes["Episode 1"] = newEpisode(playableLinks.joinToString(",")) {
+                        name = "Episode 1"
+                        episode = 1
+                        posterUrl = poster
+                    }
+                    return@forEach
                 }
             }
         }
 
-        if (episodes.isEmpty()) {
-            val directLinks = collectPlayableLinks(sourceDocument)
-
-            if (directLinks.isNotEmpty()) {
-                episodes["Episode 1"] = newEpisode(
-                    directLinks.joinToString(",")
-                ) {
-                    name = "Episode 1"
-                    episode = 1
-                    posterUrl = poster
-                }
-            }
-        }
-
-        return episodes.values
+        return allEpisodes.values
             .sortedBy { it.episode ?: Int.MAX_VALUE }
             .ifEmpty {
                 listOf(
-                    newEpisode(url) {
+                    newEpisode(pageUrl) {
                         name = "Episode 1"
                         episode = 1
                         posterUrl = poster
                     }
                 )
             }
+    }
+
+    private fun parseEpisodeBlocks(
+        document: Document,
+        poster: String?
+    ): List<Episode> {
+        val episodes = mutableListOf<Episode>()
+
+        val episodeHeaders = document.select(
+            "div.entry-content.clearfix h2:contains(Episode), " +
+                "div.entry-content.clearfix h3:contains(Episode), " +
+                "div.entry-content.clearfix h4:contains(Episode), " +
+                "div.entry-content.clearfix h5:contains(Episode), " +
+                ".entry-content h2:contains(Episode), " +
+                ".entry-content h3:contains(Episode), " +
+                ".entry-content h4:contains(Episode), " +
+                ".entry-content h5:contains(Episode), " +
+                "h2:contains(Episode), " +
+                "h3:contains(Episode), " +
+                "h4:contains(Episode), " +
+                "h5:contains(Episode)"
+        )
+
+        episodeHeaders.forEachIndexed { index, header ->
+            val epText = header.text().trim()
+            val epNo = extractEpisodeNumber(epText) ?: index + 1
+            val links = linkedSetOf<String>()
+
+            var current = header.nextElementSibling()
+
+            while (current != null) {
+                val tag = current.tagName().lowercase()
+                val text = current.text()
+
+                val isNextEpisodeHeader = (
+                    tag == "h2" ||
+                        tag == "h3" ||
+                        tag == "h4" ||
+                        tag == "h5"
+                    ) && text.contains("Episode", ignoreCase = true)
+
+                if (isNextEpisodeHeader) break
+
+                current.collectPlayableLinksFromElement().forEach { link ->
+                    links.add(link)
+                }
+
+                current = current.nextElementSibling()
+            }
+
+            if (links.isNotEmpty()) {
+                episodes.add(
+                    newEpisode(links.joinToString(",")) {
+                        name = "Episode $epNo"
+                        episode = epNo
+                        posterUrl = poster
+                    }
+                )
+            }
+        }
+
+        return episodes
     }
 
     private fun collectPlayableLinks(document: Document): List<String> {
@@ -429,18 +428,73 @@ class Happy2hub : MainAPI() {
                 "a[href*='dood'], " +
                 "a[href*='mixdrop'], " +
                 "a[href*='streamwish'], " +
-                "a[href*='vidhide']"
+                "a[href*='vidhide'], " +
+                "a[href*='vidoza'], " +
+                "a[href*='luluvdo'], " +
+                "a[href*='dailymotion']"
+        ).forEach { element ->
+            element.collectPlayableLinksFromElement().forEach { link ->
+                links.add(link)
+            }
+        }
+
+        extractMediaUrls(document.html()).forEach { link ->
+            links.add(link)
+        }
+
+        return links.toList()
+    }
+
+    private fun Element.collectPlayableLinksFromElement(): List<String> {
+        val links = linkedSetOf<String>()
+
+        select(
+            "iframe[src], " +
+                "embed[src], " +
+                "video[src], " +
+                "source[src], " +
+                "a[href], " +
+                "[data-src], " +
+                "[data-url], " +
+                "[data-video], " +
+                "[data-file]"
         ).forEach { element ->
             val raw = element.attr("src")
                 .ifBlank { element.attr("href") }
+                .ifBlank { element.attr("data-src") }
+                .ifBlank { element.attr("data-url") }
+                .ifBlank { element.attr("data-video") }
+                .ifBlank { element.attr("data-file") }
                 .trim()
 
-            if (raw.isNotBlank()) {
-                links.add(fixUrl(raw))
+            if (raw.isBlank()) return@forEach
+
+            val fixed = fixUrl(raw)
+
+            if (isPlayableUrl(fixed)) {
+                links.add(fixed)
             }
         }
 
         return links.toList()
+    }
+
+    private fun isPlayableUrl(url: String): Boolean {
+        return url.contains(".m3u8", true) ||
+            url.contains(".mp4", true) ||
+            url.contains("voe.", true) ||
+            url.contains("voe.sx", true) ||
+            url.contains("pixeldrain", true) ||
+            url.contains("filemoon", true) ||
+            url.contains("streamtape", true) ||
+            url.contains("dood", true) ||
+            url.contains("mixdrop", true) ||
+            url.contains("streamwish", true) ||
+            url.contains("vidhide", true) ||
+            url.contains("vidoza", true) ||
+            url.contains("luluvdo", true) ||
+            url.contains("dailymotion", true) ||
+            url.contains("/embed/", true)
     }
 
     override suspend fun loadLinks(
@@ -449,13 +503,13 @@ class Happy2hub : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val linksList = data.split(",")
+        val links = data.split(",")
             .map { it.trim() }
             .filter { it.isNotBlank() }
 
         var found = false
 
-        for (rawLink in linksList) {
+        for (rawLink in links) {
             val link = fixUrl(rawLink)
 
             when {
@@ -488,9 +542,71 @@ class Happy2hub : MainAPI() {
                 }
 
                 else -> {
-                    val success = loadExtractor(
+                    val directSuccess = loadExtractor(
                         link,
                         mainUrl,
+                        subtitleCallback,
+                        callback
+                    )
+
+                    if (directSuccess) {
+                        found = true
+                    } else {
+                        val nestedLinks = resolveNestedLinks(link)
+
+                        nestedLinks.forEach { nested ->
+                            val success = when {
+                                nested.contains(".m3u8", true) -> {
+                                    generateM3u8(
+                                        source = name,
+                                        streamUrl = nested,
+                                        referer = link
+                                    ).forEach(callback)
+                                    true
+                                }
+
+                                nested.contains(".mp4", true) -> {
+                                    callback(
+                                        newExtractorLink(
+                                            source = name,
+                                            name = name,
+                                            url = nested,
+                                            type = ExtractorLinkType.VIDEO
+                                        ) {
+                                            referer = link
+                                            quality = getQualityFromName(nested).takeIf {
+                                                it != Qualities.Unknown.value
+                                            } ?: Qualities.Unknown.value
+                                        }
+                                    )
+                                    true
+                                }
+
+                                else -> loadExtractor(
+                                    nested,
+                                    link,
+                                    subtitleCallback,
+                                    callback
+                                )
+                            }
+
+                            if (success) found = true
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!found && data.startsWith(mainUrl)) {
+            val document = runCatching {
+                app.get(data, headers = headers, timeout = 30L).document
+            }.getOrNull()
+
+            document?.let {
+                collectPlayableLinks(it).forEach { link ->
+                    val success = loadExtractor(
+                        link,
+                        data,
                         subtitleCallback,
                         callback
                     )
@@ -500,22 +616,44 @@ class Happy2hub : MainAPI() {
             }
         }
 
-        if (!found && data.startsWith(mainUrl)) {
-            val document = app.get(data, headers = headers, timeout = 30L).document
-
-            collectPlayableLinks(document).forEach { link ->
-                val success = loadExtractor(
-                    link,
-                    data,
-                    subtitleCallback,
-                    callback
-                )
-
-                if (success) found = true
-            }
-        }
-
         return found
+    }
+
+    private suspend fun resolveNestedLinks(url: String): List<String> {
+        val document = runCatching {
+            app.get(
+                url,
+                headers = headers,
+                referer = mainUrl,
+                timeout = 30L
+            ).document
+        }.getOrNull() ?: return emptyList()
+
+        return collectPlayableLinks(document)
+    }
+
+    private fun extractMediaUrls(html: String): List<String> {
+        val cleaned = html.cleanEscaped()
+        val links = linkedSetOf<String>()
+
+        Regex("""https?://[^"'\\\s<>]+?\.(?:m3u8|mp4)(?:\?[^"'\\\s<>]*)?""", RegexOption.IGNORE_CASE)
+            .findAll(cleaned)
+            .map { it.value.cleanEscaped() }
+            .forEach { links.add(it) }
+
+        Regex("""https?://[^"'\\\s<>]+?(?:voe\.sx|pixeldrain|filemoon|streamtape|dood|mixdrop|streamwish|vidhide|vidoza|luluvdo|dailymotion)[^"'\\\s<>]*""", RegexOption.IGNORE_CASE)
+            .findAll(cleaned)
+            .map { it.value.cleanEscaped() }
+            .forEach { links.add(it) }
+
+        Regex("""(?:file|src|source|url|video|videoUrl|data-src|data-url)\s*[:=]\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+            .findAll(cleaned)
+            .mapNotNull { it.groupValues.getOrNull(1) }
+            .map { it.cleanEscaped() }
+            .filter { isPlayableUrl(it) }
+            .forEach { links.add(fixUrl(it)) }
+
+        return links.toList()
     }
 
     private fun Element.getImageAttr(): String? {
@@ -540,6 +678,14 @@ class Happy2hub : MainAPI() {
                 ?.groupValues
                 ?.getOrNull(1)
                 ?.toIntOrNull()
+    }
+
+    private fun String.cleanEscaped(): String {
+        return this
+            .replace("\\/", "/")
+            .replace("\\u0026", "&")
+            .replace("&amp;", "&")
+            .trim()
     }
 
     private fun String.cleanTitle(): String {
