@@ -1,23 +1,38 @@
 package com.gudangfilm
 
 import com.fasterxml.jackson.annotation.JsonProperty
-import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.USER_AGENT
+import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.extractors.StreamWishExtractor
 import com.lagradost.cloudstream3.extractors.VidStack
-import com.lagradost.cloudstream3.fixUrl
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.ExtractorLinkType
+import com.lagradost.cloudstream3.utils.HlsPlaylistParser
+import com.lagradost.cloudstream3.utils.INFER_TYPE
 import com.lagradost.cloudstream3.utils.M3u8Helper.Companion.generateM3u8
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.getAndUnpack
 import com.lagradost.cloudstream3.utils.getPacked
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.json.JSONObject
-import java.net.URI
-import java.net.URLDecoder
+
+private fun fixUrlSafe(url: String, baseUrl: String): String {
+    val cleanUrl = url.trim()
+        .replace("\\/", "/")
+        .replace("&amp;", "&")
+
+    return when {
+        cleanUrl.startsWith("http://", ignoreCase = true) ||
+            cleanUrl.startsWith("https://", ignoreCase = true) -> cleanUrl
+
+        cleanUrl.startsWith("//") -> "https:$cleanUrl"
+
+        cleanUrl.startsWith("/") -> baseUrl.trimEnd('/') + cleanUrl
+
+        else -> baseUrl.trimEnd('/') + "/" + cleanUrl.trimStart('/')
+    }
+}
 
 class Movearnpre : Dingtezuni() {
     override var name = "Movearnpre"
@@ -25,12 +40,12 @@ class Movearnpre : Dingtezuni() {
 }
 
 class Minochinos : Dingtezuni() {
-    override var name = "Minochinos"
+    override var name = "Earnvids"
     override var mainUrl = "https://minochinos.com"
 }
 
 class Mivalyo : Dingtezuni() {
-    override var name = "Mivalyo"
+    override var name = "Earnvids"
     override var mainUrl = "https://mivalyo.com"
 }
 
@@ -40,23 +55,13 @@ class Ryderjet : Dingtezuni() {
 }
 
 class Bingezove : Dingtezuni() {
-    override var name = "Bingezove"
+    override var name = "Earnvids"
     override var mainUrl = "https://bingezove.com"
 }
 
-open class Dingtezuni : EarnvidsLike() {
-    override var name = "Dingtezuni"
-    override var mainUrl = "https://dingtezuni.com"
-}
-
-open class Dintezuvio : EarnvidsLike() {
-    override var name = "Dintezuvio"
-    override var mainUrl = "https://dintezuvio.com"
-}
-
-open class EarnvidsLike : ExtractorApi() {
-    override var name = "Earnvids"
-    override var mainUrl = "https://dingtezuni.com"
+open class Dingtezuni : ExtractorApi() {
+    override val name = "Earnvids"
+    override val mainUrl = "https://dingtezuni.com"
     override val requiresReferer = true
 
     override suspend fun getUrl(
@@ -65,49 +70,31 @@ open class EarnvidsLike : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
-        val embedUrl = getEmbedUrl(url)
         val headers = mapOf(
             "Sec-Fetch-Dest" to "empty",
             "Sec-Fetch-Mode" to "cors",
             "Sec-Fetch-Site" to "cross-site",
             "Origin" to mainUrl,
-            "User-Agent" to USER_AGENT
+            "User-Agent" to USER_AGENT,
         )
 
-        val response = runCatching {
-            app.get(embedUrl, referer = referer ?: "$mainUrl/", headers = headers)
-        }.getOrNull() ?: return
-
-        val html = response.text.cleanEscaped()
-        val found = linkedSetOf<String>()
-
-        extractM3u8Urls(html).forEach { found.add(normalizeUrl(it, embedUrl)) }
-
-        val unpacked = runCatching {
-            if (!getPacked(html).isNullOrEmpty()) getAndUnpack(html) else null
-        }.getOrNull()
-
-        if (!unpacked.isNullOrBlank()) {
-            val script = if (unpacked.contains("var links")) {
-                unpacked.substringAfter("var links")
-            } else {
-                unpacked
-            }.cleanEscaped()
-
-            extractM3u8Urls(script).forEach { found.add(normalizeUrl(it, embedUrl)) }
-        }
-
-        response.document.selectFirst("script:containsData(sources:)")
-            ?.data()
-            ?.cleanEscaped()
-            ?.let { script ->
-                extractM3u8Urls(script).forEach { found.add(normalizeUrl(it, embedUrl)) }
+        val response = app.get(getEmbedUrl(url), referer = referer)
+        val script = if (!getPacked(response.text).isNullOrEmpty()) {
+            var result = getAndUnpack(response.text)
+            if (result.contains("var links")) {
+                result = result.substringAfter("var links")
             }
+            result
+        } else {
+            response.document.selectFirst("script:containsData(sources:)")?.data()
+        } ?: return
 
-        found.forEach { m3u8 ->
+        Regex(":\\s*\"(.*?m3u8.*?)\"").findAll(script).forEach { m3u8Match ->
+            val streamUrl = fixUrlSafe(m3u8Match.groupValues[1], mainUrl)
+
             generateM3u8(
-                source = name,
-                streamUrl = m3u8,
+                name,
+                streamUrl,
                 referer = "$mainUrl/",
                 headers = headers
             ).forEach(callback)
@@ -119,8 +106,7 @@ open class EarnvidsLike : ExtractorApi() {
             url.contains("/d/") -> url.replace("/d/", "/v/")
             url.contains("/download/") -> url.replace("/download/", "/v/")
             url.contains("/file/") -> url.replace("/file/", "/v/")
-            url.contains("/f/") -> url.replace("/f/", "/v/")
-            else -> url
+            else -> url.replace("/f/", "/v/")
         }
     }
 }
@@ -176,15 +162,69 @@ class Meplayer : VidStack() {
     override var requiresReferer = true
 }
 
+open class Dintezuvio : ExtractorApi() {
+    override val name = "Earnvids"
+    override val mainUrl = "https://dintezuvio.com"
+    override val requiresReferer = true
+
+    override suspend fun getUrl(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        val headers = mapOf(
+            "Sec-Fetch-Dest" to "empty",
+            "Sec-Fetch-Mode" to "cors",
+            "Sec-Fetch-Site" to "cross-site",
+            "Origin" to mainUrl,
+            "User-Agent" to USER_AGENT,
+        )
+
+        val response = app.get(getEmbedUrl(url), referer = referer)
+        val script = if (!getPacked(response.text).isNullOrEmpty()) {
+            var result = getAndUnpack(response.text)
+            if (result.contains("var links")) {
+                result = result.substringAfter("var links")
+            }
+            result
+        } else {
+            response.document.selectFirst("script:containsData(sources:)")?.data()
+        } ?: return
+
+        Regex(":\\s*\"(.*?m3u8.*?)\"").findAll(script).forEach { m3u8Match ->
+            val streamUrl = fixUrlSafe(m3u8Match.groupValues[1], mainUrl)
+
+            generateM3u8(
+                name,
+                streamUrl,
+                referer = "$mainUrl/",
+                headers = headers
+            ).forEach(callback)
+        }
+    }
+
+    private fun getEmbedUrl(url: String): String {
+        return when {
+            url.contains("/d/") -> url.replace("/d/", "/v/")
+            url.contains("/download/") -> url.replace("/download/", "/v/")
+            url.contains("/file/") -> url.replace("/file/", "/v/")
+            else -> url.replace("/f/", "/v/")
+        }
+    }
+}
+
 class Veev : ExtractorApi() {
     override val name = "Veev"
     override val mainUrl = "https://veev.to"
     override val requiresReferer = false
 
-    private val pattern = Regex("""(?://|\.)(?:veev|kinoger|poophq|doods)\.(?:to|pw|com)/[ed]/([0-9A-Za-z]+)""")
+    private val pattern =
+        Regex("""(?://|\.)(?:veev|kinoger|poophq|doods)\.(?:to|pw|com)/[ed]/([0-9A-Za-z]+)""")
 
     companion object {
-        const val DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0"
+        const val DEFAULT_UA =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0"
     }
 
     override suspend fun getUrl(
@@ -193,43 +233,48 @@ class Veev : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
-        val mediaId = pattern.find(url)?.groupValues?.getOrNull(1) ?: return
+        val mediaId = pattern.find(url)?.groupValues?.get(1) ?: return
         val pageUrl = "$mainUrl/e/$mediaId"
 
-        val html = runCatching {
-            app.get(pageUrl, headers = mapOf("User-Agent" to DEFAULT_UA)).text
-        }.getOrNull() ?: return
+        val html = app.get(
+            pageUrl,
+            headers = mapOf("User-Agent" to DEFAULT_UA)
+        ).text
 
         val encRegex = Regex("""[.\s'](?:fc|_vvto\[[^]]*)(?:['\]]*)?\s*[:=]\s*['"]([^'"]+)""")
         val foundValues = encRegex.findAll(html).map { it.groupValues[1] }.toList()
 
+        if (foundValues.isEmpty()) return
+
         for (f in foundValues.reversed()) {
-            val ch = runCatching { veevDecode(f) }.getOrNull() ?: continue
+            val ch = veevDecode(f)
             if (ch == f) continue
 
             val dlUrl = "$mainUrl/dl?op=player_api&cmd=gi&file_code=$mediaId&r=$mainUrl&ch=$ch&ie=1"
-            val responseText = runCatching {
-                app.get(dlUrl, headers = mapOf("User-Agent" to DEFAULT_UA)).text
-            }.getOrNull() ?: continue
+            val responseText = app.get(
+                dlUrl,
+                headers = mapOf("User-Agent" to DEFAULT_UA)
+            ).text
 
-            val file = runCatching {
-                JSONObject(responseText).optJSONObject("file")
-            }.getOrNull() ?: continue
+            val json = try {
+                JSONObject(responseText)
+            } catch (_: Exception) {
+                continue
+            }
+
+            val file = json.optJSONObject("file") ?: continue
 
             if (file.optString("file_status") != "OK") continue
 
-            val dv = file.optJSONArray("dv")?.optJSONObject(0)?.optString("s") ?: continue
-            val rules = buildArray(ch).firstOrNull() ?: emptyList()
-            val decoded = runCatching {
-                decodeUrl(veevDecode(dv), rules)
-            }.getOrNull() ?: continue
+            val dv = file.getJSONArray("dv").getJSONObject(0).getString("s")
+            val decoded = decodeUrl(veevDecode(dv), buildArray(ch)[0])
 
             callback.invoke(
                 newExtractorLink(
-                    source = name,
-                    name = name,
-                    url = decoded,
-                    type = ExtractorLinkType.VIDEO
+                    name,
+                    name,
+                    decoded,
+                    INFER_TYPE
                 ) {
                     this.referer = mainUrl
                     this.quality = Qualities.Unknown.value
@@ -239,7 +284,19 @@ class Veev : ExtractorApi() {
         }
     }
 
+    fun String.toExoPlayerMimeType(): String {
+        return when (this.lowercase()) {
+            "video/x-matroska", "video/webm" -> HlsPlaylistParser.MimeTypes.VIDEO_MATROSKA
+            "video/mp4" -> HlsPlaylistParser.MimeTypes.VIDEO_MP4
+            "application/x-mpegurl", "application/vnd.apple.mpegurl" -> HlsPlaylistParser.MimeTypes.APPLICATION_M3U8
+            "video/avi" -> HlsPlaylistParser.MimeTypes.VIDEO_AVI
+            else -> ""
+        }
+    }
+
     private fun veevDecode(etext: String): String {
+        if (etext.isEmpty()) return etext
+
         val result = StringBuilder()
         val lut = HashMap<Int, String>()
         var n = 256
@@ -261,21 +318,16 @@ class Veev : ExtractorApi() {
 
     private fun buildArray(encoded: String): List<List<Int>> {
         val result = mutableListOf<List<Int>>()
-        val iterator = encoded.iterator()
+        val it = encoded.iterator()
 
-        fun nextIntOrZero(): Int {
-            return if (iterator.hasNext()) jsInt(iterator.nextChar()) else 0
-        }
+        fun nextIntOrZero(): Int = if (it.hasNext()) jsInt(it.nextChar()) else 0
 
         var count = nextIntOrZero()
-
         while (count != 0) {
             val row = mutableListOf<Int>()
-
             repeat(count) {
                 row.add(nextIntOrZero())
             }
-
             result.add(row.reversed())
             count = nextIntOrZero()
         }
@@ -286,81 +338,16 @@ class Veev : ExtractorApi() {
     private fun decodeUrl(encoded: String, rules: List<Int>): String {
         var text = encoded
 
-        for (rule in rules) {
-            if (rule == 1) text = text.reversed()
+        for (r in rules) {
+            if (r == 1) text = text.reversed()
 
-            val arr = text.chunked(2)
-                .map { it.toInt(16).toByte() }
-                .toByteArray()
+            val arr = text.chunked(2).mapNotNull {
+                it.toIntOrNull(16)?.toByte()
+            }.toByteArray()
 
-            text = arr.toString(Charsets.UTF_8)
-                .replace("dXRmOA==", "")
+            text = arr.toString(Charsets.UTF_8).replace("dXRmOA==", "")
         }
 
         return text
     }
-}
-
-data class FileSource(
-    @JsonProperty("file") val file: String? = null,
-    @JsonProperty("label") val label: String? = null
-)
-
-private fun extractM3u8Urls(text: String): List<String> {
-    val urls = linkedSetOf<String>()
-
-    Regex("""https?://[^"'\\\s<>]+\.m3u8[^"'\\\s<>]*""", RegexOption.IGNORE_CASE)
-        .findAll(text)
-        .map { it.value.cleanEscaped() }
-        .forEach { urls.add(it) }
-
-    Regex("""["']([^"']+\.m3u8[^"']*)["']""", RegexOption.IGNORE_CASE)
-        .findAll(text)
-        .mapNotNull { it.groupValues.getOrNull(1) }
-        .map { it.cleanEscaped() }
-        .forEach { urls.add(it) }
-
-    Regex(""":\s*["']([^"']*m3u8[^"']*)["']""", RegexOption.IGNORE_CASE)
-        .findAll(text)
-        .mapNotNull { it.groupValues.getOrNull(1) }
-        .map { it.cleanEscaped() }
-        .forEach { urls.add(it) }
-
-    Regex("""https?%3A%2F%2F[^"'\\\s<>]+?\.m3u8[^"'\\\s<>]*""", RegexOption.IGNORE_CASE)
-        .findAll(text)
-        .map {
-            runCatching {
-                URLDecoder.decode(it.value, "UTF-8")
-            }.getOrDefault(it.value)
-        }
-        .map { it.cleanEscaped() }
-        .forEach { urls.add(it) }
-
-    return urls.toList()
-}
-
-private fun normalizeUrl(url: String, baseUrl: String): String {
-    val clean = url.cleanEscaped()
-
-    return when {
-        clean.startsWith("http", true) -> clean
-        clean.startsWith("//") -> "https:$clean"
-        clean.startsWith("/") -> {
-            val origin = Regex("""^https?://[^/]+""")
-                .find(baseUrl)
-                ?.value
-                ?: ""
-            "$origin$clean"
-        }
-        else -> runCatching {
-            URI(baseUrl).resolve(clean).toString()
-        }.getOrDefault(fixUrl(clean))
-    }
-}
-
-private fun String.cleanEscaped(): String {
-    return replace("\\/", "/")
-        .replace("\\u0026", "&")
-        .replace("&amp;", "&")
-        .trim()
 }
