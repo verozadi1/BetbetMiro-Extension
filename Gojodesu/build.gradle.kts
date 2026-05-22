@@ -1,15 +1,24 @@
-// build.gradle.kts
-version = 1
+version = 2
 
 cloudstream {
     description = "Gojodesu - Anime Streaming Site"
     language = "id"
     authors = listOf("BetbetMiro")
+
+    /**
+     * Status int as the following:
+     * 0: Down
+     * 1: Ok
+     * 2: Slow
+     * 3: Beta only
+     */
     status = 1
+
     tvTypes = listOf(
-        "AnimeMovie",
-        "OVA",
         "Anime",
+        "AnimeMovie",
+        "OVA"
     )
-    iconUrl = "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://gojodesu.com&size=%size%"
+
+    iconUrl = "https://www.google.com/s2/favicons?domain=gojodesu.com&sz=%size%"
 }

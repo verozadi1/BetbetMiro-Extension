@@ -1,9 +1,9 @@
-// Extractors.kt
 package com.gojodesu
 
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.base64Decode
+import com.lagradost.cloudstream3.fixUrl
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
@@ -14,20 +14,25 @@ open class Kotakajaib : ExtractorApi() {
     override val requiresReferer = true
 
     override suspend fun getUrl(
-            url: String,
-            referer: String?,
-            subtitleCallback: (SubtitleFile) -> Unit,
-            callback: (ExtractorLink) -> Unit
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
     ) {
-        val document = app.get(url, referer = referer).document
-        val links = document.select("ul#dropdown-server li a")
-        
-        // Menggunakan for-loop, aman dan stabil
+        val document = app.get(url, referer = referer ?: mainUrl).document
+        val links = document.select("ul#dropdown-server li a[data-frame], a[data-frame]")
+
         for (a in links) {
-            val encodedFrame = a.attr("data-frame")
-            if (encodedFrame.isNotBlank()) {
+            val encodedFrame = a.attr("data-frame").trim()
+            if (encodedFrame.isBlank()) continue
+
+            val frameUrl = runCatching {
+                base64Decode(encodedFrame)
+            }.getOrNull()?.trim()
+
+            if (!frameUrl.isNullOrBlank()) {
                 loadExtractor(
-                    base64Decode(encodedFrame),
+                    fixUrl(frameUrl),
                     "$mainUrl/",
                     subtitleCallback,
                     callback

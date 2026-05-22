@@ -8,7 +8,6 @@ import com.lagradost.cloudstream3.plugins.Plugin
 class GojodesuPlugin : Plugin() {
     override fun load(context: Context) {
         registerMainAPI(Gojodesu())
-        // Kita hanya register yang ada kodenya saja
         registerExtractorAPI(Kotakajaib())
     }
 }
