@@ -132,7 +132,8 @@ class HidoristreamProvider : MainAPI() {
             timeout = 30L
         ).document
 
-        val items = parseAnimeCards(document)
+        val items = document.select("div.listupd article.bs")
+            .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
 
         return newHomePageResponse(
@@ -142,7 +143,8 @@ class HidoristreamProvider : MainAPI() {
                 "a.next, " +
                     "a[rel=next], " +
                     ".pagination a:contains(Next), " +
-                    "a[href*='page=${page + 1}']"
+                    "a[href*='page=${page + 1}'], " +
+                    "a[href*='/page/${page + 1}/']"
             ) != null || items.isNotEmpty()
         )
     }
@@ -167,86 +169,29 @@ class HidoristreamProvider : MainAPI() {
         }
     }
 
-    private fun parseAnimeCards(document: Document): List<SearchResponse> {
-        val results = linkedMapOf<String, SearchResponse>()
-
-        document.select(
-            "div.listupd article.bs, " +
-                "article.bs, " +
-                ".bs, " +
-                ".listupd .bsx, " +
-                ".bsx, " +
-                "article a[href]"
-        ).forEach { element ->
-            element.toSearchResult()?.let { item ->
-                results[item.url] = item
-            }
-        }
-
-        return results.values.toList()
-    }
-
     private fun Element.toSearchResult(): SearchResponse? {
-        val anchor = if (this.`is`("a[href]")) {
-            this
-        } else {
-            selectFirst("a[href]") ?: return null
-        }
+        val link = selectFirst("a")?.attr("href") ?: return null
 
-        val href = fixUrlNull(anchor.attr("href")) ?: return null
+        val title = selectFirst("div.tt")?.text()?.trim()
+            ?: selectFirst(".tt")?.text()?.trim()
+            ?: selectFirst("a")?.attr("title")?.trim()
+            ?: selectFirst("img")?.attr("alt")?.trim()
+            ?: return null
 
-        if (!href.startsWith(mainUrl)) return null
-        if (isBlockedUrl(href)) return null
+        val cleanTitle = title.cleanTitle()
+        if (cleanTitle.length < 2) return null
 
-        val title = listOf(
-            selectFirst("div.tt")?.text()?.trim(),
-            selectFirst(".tt")?.text()?.trim(),
-            selectFirst(".entry-title")?.text()?.trim(),
-            anchor.attr("title").trim(),
-            selectFirst("img[alt]")?.attr("alt")?.trim(),
-            anchor.text().trim()
-        ).firstOrNull {
-            !it.isNullOrBlank() &&
-                !it.equals("Home", true) &&
-                !it.equals("Next", true) &&
-                !it.equals("Previous", true)
-        }?.cleanTitle() ?: return null
-
-        if (title.length < 2) return null
-
-        val poster = fixUrlNull(
-            selectFirst("img")?.getImageAttr()
-        )
+        val poster = selectFirst("img")
+            ?.getImageAttr()
+            ?.let { fixUrlNull(it) }
 
         return newAnimeSearchResponse(
-            title,
-            href,
-            getType(title)
+            cleanTitle,
+            fixUrl(link),
+            getType(cleanTitle)
         ) {
             posterUrl = poster
         }
-    }
-
-    private fun isBlockedUrl(url: String): Boolean {
-        val path = url.substringAfter(mainUrl).trim('/').lowercase()
-
-        if (path.isBlank()) return true
-
-        val blocked = listOf(
-            "genre/",
-            "studio/",
-            "producer/",
-            "season/",
-            "status/",
-            "type/",
-            "page/",
-            "jadwal",
-            "privacy",
-            "dmca",
-            "contact"
-        )
-
-        return blocked.any { path == it.trimEnd('/') || path.startsWith(it) }
     }
 
     override suspend fun search(
@@ -272,7 +217,8 @@ class HidoristreamProvider : MainAPI() {
             timeout = 30L
         ).document
 
-        val results = parseAnimeCards(document)
+        val results = document.select("div.listupd article.bs")
+            .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
 
         return newSearchResponseList(
@@ -307,10 +253,9 @@ class HidoristreamProvider : MainAPI() {
             ?.takeIf { it.isNotBlank() }
             ?: url.substringAfterLast("/").replace("-", " ").cleanTitle()
 
-        val poster = fixUrlNull(
-            document.selectFirst("div.bigcontent img, .bigcontent img, .thumb img, img.wp-post-image")
-                ?.getImageAttr()
-        )
+        val poster = document.selectFirst("div.bigcontent img, .bigcontent img, .thumb img, img.wp-post-image")
+            ?.getImageAttr()
+            ?.let { fixUrlNull(it) }
 
         val description = document.select(
             "div.entry-content p, " +
@@ -357,7 +302,7 @@ class HidoristreamProvider : MainAPI() {
         val trailer = document.selectFirst("div.bixbox.trailer iframe, .trailer iframe")
             ?.getIframeAttr()
 
-        val recommendations = document.select("div.listupd article.bs, article.bs, .listupd .bs")
+        val recommendations = document.select("div.listupd article.bs")
             .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
             .filter { it.url != url }
@@ -471,10 +416,10 @@ class HidoristreamProvider : MainAPI() {
             }
         }
 
-        extractMediaUrls(html).forEach { url ->
+        extractMediaUrls(html).forEach { link ->
             when {
-                url.contains(".m3u8", true) || url.contains(".mp4", true) -> directLinks.add(url)
-                url.startsWith("http", true) -> embedLinks.add(url)
+                link.contains(".m3u8", true) || link.contains(".mp4", true) -> directLinks.add(link)
+                link.startsWith("http", true) -> embedLinks.add(link)
             }
         }
 
