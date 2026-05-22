@@ -154,14 +154,14 @@ class IdlixProvider : MainAPI() {
                     newMovieSearchResponse(title, link, TvType.Movie) {
                         this.posterUrl = poster
                         this.year = year
-                        this.quality = item.quality
+                        this.quality = getSearchQuality(item.quality)
                         this.score = Score.from10(item.voteAverage)
                     }
                 } else {
                     newTvSeriesSearchResponse(title, link, TvType.TvSeries) {
                         this.posterUrl = poster
                         this.year = year
-                        this.quality = item.quality
+                        this.quality = getSearchQuality(item.quality)
                         this.score = Score.from10(item.voteAverage)
                     }
                 }
@@ -349,7 +349,7 @@ class IdlixProvider : MainAPI() {
             ) {
                 this.posterUrl = poster
                 this.year = year
-                this.quality = quality
+                this.quality = getSearchQuality(quality)
                 this.score = Score.from10(voteAverageFinal)
             }
         } else {
@@ -360,7 +360,7 @@ class IdlixProvider : MainAPI() {
             ) {
                 this.posterUrl = poster
                 this.year = year
-                this.quality = quality
+                this.quality = getSearchQuality(quality)
                 this.score = Score.from10(voteAverageFinal)
             }
         }
