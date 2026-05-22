@@ -1,6 +1,5 @@
 package com.gerakin21
 
-import com.lagradost.cloudstream3.Episode
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
@@ -12,6 +11,7 @@ import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.fixUrl
 import com.lagradost.cloudstream3.fixUrlNull
 import com.lagradost.cloudstream3.mainPageOf
+import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newMovieSearchResponse
@@ -19,7 +19,6 @@ import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
-import com.lagradost.cloudstream3.utils.toRatingInt
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
@@ -162,9 +161,7 @@ class Gerakin21 : MainAPI() {
         )?.getImageAttr()
             ?.let { fixUrlNull(it) }
 
-        val type = getTypeFromUrl(href, title, emptyList())
-
-        return when (type) {
+        return when (getTypeFromUrl(href, title, emptyList())) {
             TvType.TvSeries -> newTvSeriesSearchResponse(
                 title,
                 href,
@@ -299,15 +296,6 @@ class Gerakin21 : MainAPI() {
             }
         }?.cleanPlot()
 
-        val rating = document.selectFirst(
-            "span.rating, " +
-                ".rating, " +
-                ".score, " +
-                ".imdb, " +
-                "[itemprop=ratingValue]"
-        )?.text()
-            ?.toRatingInt()
-
         val tags = document.select(
             "a[href*='/genre/'], " +
                 "a[href*='/category/'], " +
@@ -357,10 +345,9 @@ class Gerakin21 : MainAPI() {
                     ?.cleanTitle()
                     ?: "Episode"
 
-                Episode(
-                    data = epHref,
+                newEpisode(epHref) {
                     name = epTitle
-                )
+                }
             }.distinctBy { it.data }
 
             newTvSeriesLoadResponse(
@@ -371,7 +358,6 @@ class Gerakin21 : MainAPI() {
             ) {
                 posterUrl = poster
                 plot = description
-                this.rating = rating
                 this.tags = tags
                 this.recommendations = recommendations
             }
@@ -384,7 +370,6 @@ class Gerakin21 : MainAPI() {
             ) {
                 posterUrl = poster
                 plot = description
-                this.rating = rating
                 this.tags = tags
                 this.recommendations = recommendations
             }
