@@ -1,6 +1,5 @@
 package com.sad25kag.dubbindo
 
-import com.sad25kag.dubbindo.BuildConfig
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
@@ -28,8 +27,6 @@ class DubbindoProvider : MainAPI() {
         TvType.Anime,
     )
 
-    private val username = BuildConfig.DUBBINDO_USERNAME
-    private val password = BuildConfig.DUBBINDO_PASSWORD
 
     private var sessionCookie = ""
 
