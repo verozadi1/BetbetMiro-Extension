@@ -27,7 +27,6 @@ import com.lagradost.cloudstream3.newSearchResponseList
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.AppUtils
-import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
@@ -58,28 +57,40 @@ class IdlixProvider : MainAPI() {
 
     override val mainPage = mainPageOf(
         "" to "Terbaru",
+
         "category/movies/" to "Movies",
         "category/serial-tv/" to "Serial TV",
         "category/animation/" to "Animation",
+        "category/anime/" to "Anime",
+        "category/box-office/" to "BOX OFFICE",
         "best-rating/" to "Best Rating",
 
         "category/action/" to "Action",
         "category/adventure/" to "Adventure",
         "category/action-adventure/" to "Action & Adventure",
+        "category/animation/" to "Animation",
         "category/comedy/" to "Comedy",
         "category/crime/" to "Crime",
         "category/documentary/" to "Documentary",
         "category/drama/" to "Drama",
         "category/family/" to "Family",
         "category/fantasy/" to "Fantasy",
+        "category/history/" to "History",
         "category/horror/" to "Horror",
+        "category/music/" to "Music",
         "category/mystery/" to "Mystery",
+        "category/reality/" to "Reality",
         "category/romance/" to "Romance",
         "category/science-fiction/" to "Science Fiction",
         "category/sci-fi-fantasy/" to "Sci-Fi & Fantasy",
         "category/thriller/" to "Thriller",
+        "category/tv-movie/" to "TV Movie",
+        "category/war/" to "War",
         "category/war-politics/" to "War & Politics",
+        "category/western/" to "Western",
 
+        "year/2026/" to "2026",
+        "year/2025/" to "2025",
         "year/2024/" to "2024",
         "year/2023/" to "2023",
         "year/2022/" to "2022",
@@ -90,21 +101,34 @@ class IdlixProvider : MainAPI() {
         "year/2017/" to "2017",
         "year/2016/" to "2016",
         "year/2015/" to "2015",
+        "year/2014/" to "2014",
+        "year/2013/" to "2013",
+        "year/2012/" to "2012",
+        "year/2011/" to "2011",
+        "year/2010/" to "2010",
 
-        "country/philippines/" to "Philippines",
+        "country/indonesia/" to "Indonesia",
         "country/korea/" to "Korea",
-        "country/australia/" to "Australia",
-        "country/canada/" to "Canada",
+        "country/japan/" to "Japan",
         "country/china/" to "China",
+        "country/thailand/" to "Thailand",
+        "country/philippines/" to "Philippines",
+        "country/malaysia/" to "Malaysia",
+        "country/singapore/" to "Singapore",
+        "country/india/" to "India",
+        "country/hong-kong/" to "Hong Kong",
+        "country/taiwan/" to "Taiwan",
         "country/usa/" to "USA",
         "country/united-kingdom/" to "United Kingdom",
-        "country/thailand/" to "Thailand",
-        "country/indonesia/" to "Indonesia",
-        "country/japan/" to "Japan",
-        "country/hong-kong/" to "Hong Kong",
-        "country/india/" to "India",
-        "country/singapore/" to "Singapore",
-        "country/malaysia/" to "Malaysia"
+        "country/france/" to "France",
+        "country/germany/" to "Germany",
+        "country/spain/" to "Spain",
+        "country/australia/" to "Australia",
+        "country/canada/" to "Canada",
+        "country/brazil/" to "Brazil",
+        "country/denmark/" to "Denmark",
+        "country/estonia/" to "Estonia",
+        "country/israel/" to "Israel"
     )
 
     private val headers = mapOf(
@@ -122,7 +146,7 @@ class IdlixProvider : MainAPI() {
         val document = app.get(
             url,
             headers = headers,
-            timeout = 30L
+            timeout = 20L
         ).document
 
         val results = parseCards(document)
@@ -131,14 +155,7 @@ class IdlixProvider : MainAPI() {
         return newHomePageResponse(
             request.name,
             results,
-            hasNext = document.selectFirst(
-                "a.next, " +
-                    "a[rel=next], " +
-                    ".pagination a:contains(Next), " +
-                    ".nav-links a:contains(Next), " +
-                    ".page-numbers.next, " +
-                    "a[href*='/page/${page + 1}/']"
-            ) != null
+            hasNext = hasNextPage(document, page)
         )
     }
 
@@ -154,6 +171,20 @@ class IdlixProvider : MainAPI() {
             page <= 1 -> "$mainUrl/$clean/"
             else -> "$mainUrl/$clean/page/$page/"
         }
+    }
+
+    private fun hasNextPage(
+        document: Document,
+        page: Int
+    ): Boolean {
+        return document.selectFirst(
+            "a.next, " +
+                "a[rel=next], " +
+                ".pagination a:contains(Next), " +
+                ".nav-links a:contains(Next), " +
+                ".page-numbers.next, " +
+                "a[href*='/page/${page + 1}/']"
+        ) != null
     }
 
     private fun parseCards(document: Document): List<SearchResponse> {
@@ -305,7 +336,7 @@ class IdlixProvider : MainAPI() {
         val document = app.get(
             url,
             headers = headers,
-            timeout = 30L
+            timeout = 20L
         ).document
 
         val results = parseCards(document)
@@ -313,14 +344,7 @@ class IdlixProvider : MainAPI() {
 
         return newSearchResponseList(
             results,
-            hasNext = document.selectFirst(
-                "a.next, " +
-                    "a[rel=next], " +
-                    ".pagination a:contains(Next), " +
-                    ".nav-links a:contains(Next), " +
-                    ".page-numbers.next, " +
-                    "a[href*='/page/${page + 1}/']"
-            ) != null
+            hasNext = hasNextPage(document, page)
         )
     }
 
@@ -336,7 +360,7 @@ class IdlixProvider : MainAPI() {
         val document = app.get(
             url,
             headers = headers,
-            timeout = 30L
+            timeout = 20L
         ).document
 
         val title = document.selectFirst("h1.entry-title, h1")
@@ -536,7 +560,7 @@ class IdlixProvider : MainAPI() {
             data,
             headers = headers,
             referer = mainUrl,
-            timeout = 30L
+            timeout = 18L
         )
 
         val document = response.document
@@ -566,7 +590,9 @@ class IdlixProvider : MainAPI() {
                 .ifBlank { element.attr("src") }
                 .trim()
 
-            addCandidate(raw, data, directLinks, embedLinks)
+            if (raw.isNotBlank() && !shouldSkipSlowHost(raw)) {
+                addCandidate(raw, data, directLinks, embedLinks)
+            }
         }
 
         document.select("a[href]").forEach { element ->
@@ -574,9 +600,9 @@ class IdlixProvider : MainAPI() {
             val text = element.text().lowercase()
 
             if (
+                href.isBlank() ||
+                shouldSkipSlowHost(href) ||
                 text.contains("trailer") ||
-                href.contains("youtube.com", true) ||
-                href.contains("youtu.be", true) ||
                 href.startsWith("#") ||
                 href.startsWith("javascript", true)
             ) {
@@ -586,6 +612,7 @@ class IdlixProvider : MainAPI() {
             if (
                 href.contains(".m3u8", true) ||
                 href.contains(".mp4", true) ||
+                href.contains(".webm", true) ||
                 href.contains("embed", true) ||
                 href.contains("player", true) ||
                 href.contains("stream", true) ||
@@ -601,7 +628,17 @@ class IdlixProvider : MainAPI() {
                 href.contains("hgcloud", true) ||
                 href.contains("hglink", true) ||
                 href.contains("luluvdoo", true) ||
-                href.contains("majorplay", true)
+                href.contains("majorplay", true) ||
+                href.contains("filemoon", true) ||
+                href.contains("streamwish", true) ||
+                href.contains("wishfast", true) ||
+                href.contains("dood", true) ||
+                href.contains("streamtape", true) ||
+                href.contains("vidhide", true) ||
+                href.contains("vidguard", true) ||
+                href.contains("voe", true) ||
+                href.contains("mixdrop", true) ||
+                href.contains("mp4upload", true)
             ) {
                 addCandidate(href, data, directLinks, embedLinks)
             }
@@ -613,42 +650,55 @@ class IdlixProvider : MainAPI() {
 
         var found = false
 
-        directLinks.distinct().forEach { link ->
-            emitDirectLink(
-                link = link,
-                referer = data,
-                callback = callback
+        directLinks
+            .filterNot { isAdUrl(it) }
+            .distinct()
+            .sortedWith(
+                compareBy<String> { if (isHlsLike(it)) 0 else 1 }
+                    .thenBy { hostPriority(it) }
             )
-            found = true
-        }
-
-        embedLinks.distinct().forEach { embed ->
-            val success = loadExtractor(
-                embed,
-                data,
-                subtitleCallback,
-                callback
-            )
-
-            if (success) {
+            .forEach { link ->
+                emitDirectLink(
+                    link = link,
+                    referer = data,
+                    callback = callback
+                )
                 found = true
-            } else {
+            }
+
+        if (found) return true
+
+        prioritizeEmbeds(embedLinks)
+            .take(8)
+            .forEach { embed ->
+                val success = loadExtractor(
+                    embed,
+                    data,
+                    subtitleCallback,
+                    callback
+                )
+
+                if (success) return true
+
                 resolveNestedLinks(embed, data).forEach { nested ->
                     val fixed = normalizeUrl(nested, embed).replace(".txt", ".m3u8")
 
                     when {
                         isAdUrl(fixed) -> Unit
 
-                        isHlsLike(fixed) || fixed.contains(".mp4", true) -> {
+                        isHlsLike(fixed) ||
+                            fixed.contains(".mp4", true) ||
+                            fixed.contains(".webm", true) -> {
                             emitDirectLink(
                                 link = fixed,
                                 referer = embed,
                                 callback = callback
                             )
-                            found = true
+                            return true
                         }
 
-                        fixed.startsWith("http", true) -> {
+                        fixed.startsWith("http", true) &&
+                            !shouldSkipSlowHost(fixed) -> {
                             val nestedSuccess = loadExtractor(
                                 fixed,
                                 embed,
@@ -656,14 +706,13 @@ class IdlixProvider : MainAPI() {
                                 callback
                             )
 
-                            if (nestedSuccess) found = true
+                            if (nestedSuccess) return true
                         }
                     }
                 }
             }
-        }
 
-        return found
+        return false
     }
 
     private suspend fun collectDooplayAjaxLinks(
@@ -705,7 +754,7 @@ class IdlixProvider : MainAPI() {
                         "X-Requested-With" to "XMLHttpRequest",
                         "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8"
                     ),
-                    timeout = 30L
+                    timeout = 15L
                 ).text.cleanEscaped()
             }.getOrNull().orEmpty()
 
@@ -758,12 +807,14 @@ class IdlixProvider : MainAPI() {
         url: String,
         referer: String
     ): List<String> {
+        if (shouldSkipSlowHost(url)) return emptyList()
+
         val text = runCatching {
             app.get(
                 url,
                 headers = headers,
                 referer = referer,
-                timeout = 30L
+                timeout = 12L
             ).text.cleanEscaped()
         }.getOrNull().orEmpty()
 
@@ -786,8 +837,12 @@ class IdlixProvider : MainAPI() {
         if (fixed.isBlank() || isAdUrl(fixed)) return
 
         when {
-            isHlsLike(fixed) || fixed.contains(".mp4", true) -> directLinks.add(fixed)
-            fixed.startsWith("http", true) -> embedLinks.add(fixed)
+            isHlsLike(fixed) ||
+                fixed.contains(".mp4", true) ||
+                fixed.contains(".webm", true) -> directLinks.add(fixed)
+
+            fixed.startsWith("http", true) &&
+                !shouldSkipSlowHost(fixed) -> embedLinks.add(fixed)
         }
     }
 
@@ -822,7 +877,7 @@ class IdlixProvider : MainAPI() {
         val clean = text.cleanEscaped()
 
         Regex(
-            """https?://[^"'\\\s<>]+?\.(?:m3u8|mp4|txt)(?:\?[^"'\\\s<>]*)?""",
+            """https?://[^"'\\\s<>]+?\.(?:m3u8|mp4|webm|txt)(?:\?[^"'\\\s<>]*)?""",
             RegexOption.IGNORE_CASE
         ).findAll(clean)
             .map { it.value.cleanEscaped().replace(".txt", ".m3u8") }
@@ -830,7 +885,15 @@ class IdlixProvider : MainAPI() {
             .forEach { urls.add(it) }
 
         Regex(
-            """https?://[^"'\\\s<>]+?(?:majorplay|e2e\.majorplay|pm21|dm21|4meplayer|veev|hglink|hgcloud|luluvdoo|minochinos|dingtezuni|dintezuvio|mivalyo|movearnpre)[^"'\\\s<>]*""",
+            """//[^"'\\\s<>]+?\.(?:m3u8|mp4|webm|txt)(?:\?[^"'\\\s<>]*)?""",
+            RegexOption.IGNORE_CASE
+        ).findAll(clean)
+            .map { "https:${it.value.cleanEscaped().replace(".txt", ".m3u8")}" }
+            .filterNot { isAdUrl(it) }
+            .forEach { urls.add(it) }
+
+        Regex(
+            """https?://[^"'\\\s<>]+?(?:majorplay|e2e\.majorplay|pm21|dm21|4meplayer|veev|hglink|hgcloud|luluvdoo|minochinos|dingtezuni|dintezuvio|mivalyo|movearnpre|filemoon|streamwish|wishfast|dood|streamtape|vidhide|vidguard|voe|mixdrop|mp4upload)[^"'\\\s<>]*""",
             RegexOption.IGNORE_CASE
         ).findAll(clean)
             .map { it.value.cleanEscaped() }
@@ -838,7 +901,7 @@ class IdlixProvider : MainAPI() {
             .forEach { urls.add(it) }
 
         Regex(
-            """https?%3A%2F%2F[^"'\\\s<>]+?(?:\.m3u8|\.mp4|\.txt|majorplay|pm21|dm21|4meplayer|veev|hglink|hgcloud|luluvdoo|minochinos|dingtezuni|dintezuvio|mivalyo|movearnpre)[^"'\\\s<>]*""",
+            """https?%3A%2F%2F[^"'\\\s<>]+?(?:\.m3u8|\.mp4|\.webm|\.txt|majorplay|pm21|dm21|4meplayer|veev|hglink|hgcloud|luluvdoo|minochinos|dingtezuni|dintezuvio|mivalyo|movearnpre|filemoon|streamwish|wishfast|dood|streamtape|vidhide|vidguard|voe|mixdrop|mp4upload)[^"'\\\s<>]*""",
             RegexOption.IGNORE_CASE
         ).findAll(clean)
             .map {
@@ -851,7 +914,7 @@ class IdlixProvider : MainAPI() {
             .forEach { urls.add(it) }
 
         Regex(
-            """(?:file|src|source|url|videoSource|videoUrl|embedUrl|embed_url)\s*[:=]\s*["']([^"']+)["']""",
+            """(?:file|src|source|url|videoSource|videoUrl|video_url|playUrl|play_url|hls|hlsUrl|hls_url|embedUrl|embed_url)\s*[:=]\s*["']([^"']+)["']""",
             RegexOption.IGNORE_CASE
         ).findAll(clean)
             .mapNotNull { it.groupValues.getOrNull(1) }
@@ -859,6 +922,7 @@ class IdlixProvider : MainAPI() {
             .filter {
                 it.contains(".m3u8", true) ||
                     it.contains(".mp4", true) ||
+                    it.contains(".webm", true) ||
                     it.contains("majorplay", true) ||
                     it.contains("pm21", true) ||
                     it.contains("dm21", true) ||
@@ -871,7 +935,17 @@ class IdlixProvider : MainAPI() {
                     it.contains("dingtezuni", true) ||
                     it.contains("dintezuvio", true) ||
                     it.contains("mivalyo", true) ||
-                    it.contains("movearnpre", true)
+                    it.contains("movearnpre", true) ||
+                    it.contains("filemoon", true) ||
+                    it.contains("streamwish", true) ||
+                    it.contains("wishfast", true) ||
+                    it.contains("dood", true) ||
+                    it.contains("streamtape", true) ||
+                    it.contains("vidhide", true) ||
+                    it.contains("vidguard", true) ||
+                    it.contains("voe", true) ||
+                    it.contains("mixdrop", true) ||
+                    it.contains("mp4upload", true)
             }
             .filterNot { isAdUrl(it) }
             .forEach { urls.add(it) }
@@ -900,6 +974,68 @@ class IdlixProvider : MainAPI() {
                 URI(baseUrl).resolve(clean).toString()
             }.getOrDefault(clean)
         }
+    }
+
+    private fun prioritizeEmbeds(links: Collection<String>): List<String> {
+        return links
+            .filterNot { isAdUrl(it) }
+            .filterNot { shouldSkipSlowHost(it) }
+            .distinct()
+            .sortedWith(
+                compareBy<String> { hostPriority(it) }
+                    .thenBy { it.length }
+            )
+    }
+
+    private fun hostPriority(url: String): Int {
+        val value = url.lowercase()
+
+        return when {
+            value.contains("majorplay") -> 0
+            value.contains("e2e.majorplay") -> 0
+            value.contains("4meplayer") -> 1
+            value.contains("pm21") -> 2
+            value.contains("dm21") -> 3
+            value.contains("hglink") -> 4
+            value.contains("hgcloud") -> 5
+            value.contains("luluvdoo") -> 6
+            value.contains("veev") -> 7
+            value.contains("filemoon") -> 8
+            value.contains("streamwish") -> 9
+            value.contains("wishfast") -> 10
+            value.contains("dood") -> 11
+            value.contains("streamtape") -> 12
+            value.contains("vidhide") -> 13
+            value.contains("vidguard") -> 14
+            value.contains("voe") -> 15
+            value.contains("mixdrop") -> 16
+            value.contains("mp4upload") -> 17
+            value.contains("minochinos") -> 18
+            value.contains("dingtezuni") -> 19
+            value.contains("dintezuvio") -> 20
+            value.contains("mivalyo") -> 21
+            value.contains("movearnpre") -> 22
+            value.contains("embed") -> 30
+            value.contains("player") -> 31
+            value.contains("stream") -> 32
+            else -> 50
+        }
+    }
+
+    private fun shouldSkipSlowHost(url: String): Boolean {
+        val value = url.lowercase()
+
+        return value.contains("facebook.com") ||
+            value.contains("twitter.com") ||
+            value.contains("telegram") ||
+            value.contains("whatsapp") ||
+            value.contains("youtube.com") ||
+            value.contains("youtu.be") ||
+            value.contains("trailer") ||
+            value.contains("ads") ||
+            value.contains("banner") ||
+            value.contains("download") ||
+            value.contains("mailto:")
     }
 
     private fun Element.getImageAttr(): String? {
@@ -1043,7 +1179,15 @@ class IdlixProvider : MainAPI() {
             url.contains("/content/uploads/videos/", true) ||
             url.contains("demo.sngine.com", true) ||
             url.contains("doubleclick", true) ||
-            url.contains("googlesyndication", true)
+            url.contains("googlesyndication", true) ||
+            url.contains("popads", true) ||
+            url.contains("onclick", true) ||
+            url.contains("adskeeper", true) ||
+            url.contains("adsterra", true) ||
+            url.contains("/ads/", true) ||
+            url.contains("banner", true) ||
+            url.contains("tracking", true) ||
+            url.contains("analytics", true)
     }
 
     private fun qualityFromUrl(url: String): Int {
