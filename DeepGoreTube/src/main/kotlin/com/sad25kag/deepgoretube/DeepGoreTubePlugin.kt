@@ -1,4 +1,4 @@
-package com.betbetmiro.deepgoretube
+package com.sad25kag.deepgoretube
 
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
