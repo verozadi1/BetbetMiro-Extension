@@ -1,26 +1,19 @@
-version = 11
+version = 20
 
 cloudstream {
     language = "id"
     authors = listOf("BetbetMiro")
-    description = "Idlix provider with API homepage, categories, series episodes, subtitles, and hardened playback extraction."
+    description = "Idlix HTML provider for ryangoslingfrance.com with categories, movies, series, episodes, and hardened playback extraction."
 
-    /**
-     * Status int as the following:
-     * 0: Down
-     * 1: Ok
-     * 2: Slow
-     * 3: Beta only
-     */
     status = 1
 
     tvTypes = listOf(
-        "TvSeries",
         "Movie",
+        "TvSeries",
         "Anime",
         "AsianDrama"
     )
 
     isCrossPlatform = false
-    iconUrl = "https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/Icons/idlix.png"
+    iconUrl = "https://www.google.com/s2/favicons?domain=ryangoslingfrance.com&sz=%size%"
 }

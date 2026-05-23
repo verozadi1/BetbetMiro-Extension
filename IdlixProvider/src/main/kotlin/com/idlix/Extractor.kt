@@ -1,6 +1,5 @@
 package com.idlix
 
-import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.app
@@ -12,115 +11,104 @@ import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.getAndUnpack
 import com.lagradost.cloudstream3.utils.getPacked
 import com.lagradost.cloudstream3.utils.getQualityFromName
+import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import java.net.URI
 import java.net.URLDecoder
 
-class Jeniusplay : ExtractorApi() {
-    override var name = "Jeniusplay"
-    override var mainUrl = "https://jeniusplay.com"
-    override val requiresReferer = true
-
-    override suspend fun getUrl(
-        url: String,
-        referer: String?,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ) {
-        val cleanUrl = url.replace(" ", "%20")
-        val headers = mapOf(
-            "User-Agent" to USER_AGENT,
-            "Accept" to "*/*",
-            "Referer" to (referer ?: mainUrl)
-        )
-
-        val response = runCatching {
-            app.get(
-                cleanUrl,
-                referer = referer ?: mainUrl,
-                headers = headers,
-                timeout = 30L
-            )
-        }.getOrNull() ?: return
-
-        val html = response.text.cleanEscaped()
-        val found = linkedSetOf<String>()
-
-        extractStreamUrls(html).forEach {
-            found.add(normalizeUrl(it, cleanUrl))
-        }
-
-        val unpacked = runCatching {
-            if (!getPacked(html).isNullOrEmpty()) getAndUnpack(html) else null
-        }.getOrNull()
-
-        if (!unpacked.isNullOrBlank()) {
-            extractStreamUrls(unpacked.cleanEscaped()).forEach {
-                found.add(normalizeUrl(it, cleanUrl))
-            }
-        }
-
-        if (found.isEmpty()) {
-            val hash = cleanUrl.substringAfter("data=", cleanUrl.substringAfterLast("/"))
-                .substringBefore("&")
-                .substringBefore("?")
-                .trim()
-
-            val endpoints = listOf(
-                "$mainUrl/player/ajax.php?data=$hash&do=getVideo",
-                "$mainUrl/player/index.php?data=$hash&do=getVideo"
-            )
-
-            endpoints.forEach { endpoint ->
-                val postText = runCatching {
-                    app.post(
-                        url = endpoint,
-                        data = mapOf(
-                            "hash" to hash,
-                            "r" to (referer ?: "")
-                        ),
-                        referer = cleanUrl,
-                        headers = headers + mapOf("X-Requested-With" to "XMLHttpRequest"),
-                        timeout = 30L
-                    ).text.cleanEscaped()
-                }.getOrNull().orEmpty()
-
-                extractStreamUrls(postText).forEach {
-                    found.add(normalizeUrl(it, cleanUrl))
-                }
-            }
-        }
-
-        found
-            .filterNot { isAdUrl(it) }
-            .forEach { stream ->
-                emitVideo(
-                    source = name,
-                    streamUrl = stream,
-                    referer = cleanUrl,
-                    callback = callback
-                )
-            }
-    }
-
-    data class ResponseSource(
-        @JsonProperty("videoSource") val videoSource: String? = null
-    )
+class IdlixHtmlExtractor : HtmlMediaExtractor() {
+    override var name = "Idlix HTML"
+    override var mainUrl = "https://ryangoslingfrance.com"
 }
 
-class Majorplay : MajorplayBase() {
-    override var name = "Majorplay"
-    override var mainUrl = "https://e2e.majorplay.net"
+class Pm21P2p : HtmlMediaExtractor() {
+    override var name = "PM21"
+    override var mainUrl = "https://pm21.p2pplay.pro"
 }
 
-class MajorplayNet : MajorplayBase() {
+class Dm21Embed : HtmlMediaExtractor() {
+    override var name = "DM21"
+    override var mainUrl = "https://dm21.embed4me.vip"
+}
+
+class Dm21Upns : HtmlMediaExtractor() {
+    override var name = "DM21"
+    override var mainUrl = "https://dm21.upns.live"
+}
+
+class MePlayer : HtmlMediaExtractor() {
+    override var name = "4MePlayer"
+    override var mainUrl = "https://video.4meplayer.com"
+}
+
+class SerhMePlayer : HtmlMediaExtractor() {
+    override var name = "4MePlayer"
+    override var mainUrl = "https://serh.4meplayer.online"
+}
+
+class FourMePlayer : HtmlMediaExtractor() {
+    override var name = "4MePlayer"
+    override var mainUrl = "https://4meplayer.com"
+}
+
+class MinocHinos : HtmlMediaExtractor() {
+    override var name = "Minochinos"
+    override var mainUrl = "https://minochinos.com"
+}
+
+class DingTezuni : HtmlMediaExtractor() {
+    override var name = "Dingtezuni"
+    override var mainUrl = "https://dingtezuni.com"
+}
+
+class DinTezuvio : HtmlMediaExtractor() {
+    override var name = "Dintezuvio"
+    override var mainUrl = "https://dintezuvio.com"
+}
+
+class Mivalyo : HtmlMediaExtractor() {
+    override var name = "Mivalyo"
+    override var mainUrl = "https://mivalyo.com"
+}
+
+class MovEarnPre : HtmlMediaExtractor() {
+    override var name = "Movearnpre"
+    override var mainUrl = "https://movearnpre.com"
+}
+
+class VeevTo : HtmlMediaExtractor() {
+    override var name = "Veev"
+    override var mainUrl = "https://veev.to"
+}
+
+class HgCloud : HtmlMediaExtractor() {
+    override var name = "HGCloud"
+    override var mainUrl = "https://hgcloud.to"
+}
+
+class HgLink : HtmlMediaExtractor() {
+    override var name = "HGLink"
+    override var mainUrl = "https://hglink.to"
+}
+
+class LuluVdoo : HtmlMediaExtractor() {
+    override var name = "LuluVdoo"
+    override var mainUrl = "https://luluvdoo.com"
+}
+
+class Majorplay : HtmlMediaExtractor() {
     override var name = "Majorplay"
     override var mainUrl = "https://majorplay.net"
 }
 
-open class MajorplayBase : ExtractorApi() {
+class E2eMajorplay : HtmlMediaExtractor() {
     override var name = "Majorplay"
     override var mainUrl = "https://e2e.majorplay.net"
+}
+
+open class HtmlMediaExtractor : ExtractorApi() {
+    override var name = "HTML Media"
+    override var mainUrl = ""
     override val requiresReferer = true
 
     override suspend fun getUrl(
@@ -132,7 +120,7 @@ open class MajorplayBase : ExtractorApi() {
         val fixedUrl = url.replace(" ", "%20")
         val domain = runCatching {
             "https://${URI(fixedUrl).host}"
-        }.getOrDefault(mainUrl)
+        }.getOrDefault(mainUrl.ifBlank { fixedUrl })
 
         val response = runCatching {
             app.get(
@@ -140,8 +128,8 @@ open class MajorplayBase : ExtractorApi() {
                 referer = referer ?: domain,
                 headers = mapOf(
                     "User-Agent" to USER_AGENT,
-                    "Referer" to (referer ?: domain),
-                    "Accept" to "*/*"
+                    "Accept" to "*/*",
+                    "Referer" to (referer ?: domain)
                 ),
                 timeout = 30L
             )
@@ -159,29 +147,30 @@ open class MajorplayBase : ExtractorApi() {
             return
         }
 
-        val document = response.document
-        val streams = linkedSetOf<String>()
+        val directLinks = linkedSetOf<String>()
+        val embedLinks = linkedSetOf<String>()
 
-        document.select("video source[src], source[src], video[src]").forEach { source ->
-            val src = source.attr("src")
-                .ifBlank { source.attr("abs:src") }
+        response.document.select(
+            "iframe[src], " +
+                "iframe[data-src], " +
+                "iframe[data-litespeed-src], " +
+                "embed[src], " +
+                "source[src], " +
+                "video[src], " +
+                "video source[src], " +
+                "a[href]"
+        ).forEach { element ->
+            val raw = element.attr("data-litespeed-src")
+                .ifBlank { element.attr("data-src") }
+                .ifBlank { element.attr("src") }
+                .ifBlank { element.attr("href") }
                 .trim()
 
-            if (src.isNotBlank()) {
-                streams.add(normalizeUrl(src, fixedUrl))
-            }
+            addCandidate(raw, fixedUrl, directLinks, embedLinks)
         }
 
-        extractStreamUrls(body).forEach {
-            streams.add(normalizeUrl(it, fixedUrl))
-        }
-
-        extractMajorplayConfigUrls(body).forEach { configUrl ->
-            resolveMajorplayConfig(
-                configUrl = normalizeUrl(configUrl, fixedUrl),
-                referer = referer ?: domain,
-                callback = callback
-            )
+        extractPlayableUrls(body).forEach { raw ->
+            addCandidate(raw, fixedUrl, directLinks, embedLinks)
         }
 
         val unpacked = runCatching {
@@ -189,128 +178,77 @@ open class MajorplayBase : ExtractorApi() {
         }.getOrNull()
 
         if (!unpacked.isNullOrBlank()) {
-            extractStreamUrls(unpacked.cleanEscaped()).forEach {
-                streams.add(normalizeUrl(it, fixedUrl))
-            }
-
-            extractMajorplayConfigUrls(unpacked.cleanEscaped()).forEach { configUrl ->
-                resolveMajorplayConfig(
-                    configUrl = normalizeUrl(configUrl, fixedUrl),
-                    referer = referer ?: domain,
-                    callback = callback
-                )
+            extractPlayableUrls(unpacked.cleanEscaped()).forEach { raw ->
+                addCandidate(raw, fixedUrl, directLinks, embedLinks)
             }
         }
-
-        streams
-            .filterNot { isAdUrl(it) }
-            .forEach { stream ->
-                emitVideo(
-                    source = name,
-                    streamUrl = stream,
-                    referer = referer ?: domain,
-                    callback = callback
-                )
-            }
 
         extractSubtitles(body, domain, subtitleCallback)
 
-        val scripts = document.selectFirst("script:containsData(subtitles)")?.data().orEmpty()
-        extractSubtitles(scripts, domain, subtitleCallback)
-    }
-
-    private suspend fun resolveMajorplayConfig(
-        configUrl: String,
-        referer: String,
-        callback: (ExtractorLink) -> Unit
-    ) {
-        if (isAdUrl(configUrl)) return
-
-        val response = runCatching {
-            app.get(
-                configUrl,
-                referer = referer,
-                headers = mapOf(
-                    "User-Agent" to USER_AGENT,
-                    "Referer" to referer,
-                    "Accept" to "*/*"
-                ),
-                timeout = 30L
-            )
-        }.getOrNull() ?: return
-
-        val text = response.text.cleanEscaped()
-
-        if (text.trimStart().startsWith("#EXTM3U")) {
+        directLinks.distinct().forEach { link ->
             emitVideo(
                 source = name,
-                streamUrl = configUrl,
-                referer = referer,
+                streamUrl = link,
+                referer = fixedUrl,
                 callback = callback
             )
-            return
         }
 
-        extractStreamUrls(text)
-            .map { normalizeUrl(it, configUrl) }
-            .filterNot { isAdUrl(it) }
-            .forEach { stream ->
-                emitVideo(
-                    source = name,
-                    streamUrl = stream,
-                    referer = configUrl,
-                    callback = callback
+        embedLinks.distinct()
+            .filter { it != fixedUrl }
+            .forEach { embed ->
+                val success = loadExtractor(
+                    embed,
+                    fixedUrl,
+                    subtitleCallback,
+                    callback
                 )
+
+                if (!success) {
+                    runCatching {
+                        val nested = app.get(
+                            embed,
+                            referer = fixedUrl,
+                            headers = mapOf(
+                                "User-Agent" to USER_AGENT,
+                                "Accept" to "*/*",
+                                "Referer" to fixedUrl
+                            ),
+                            timeout = 30L
+                        ).text.cleanEscaped()
+
+                        extractPlayableUrls(nested).forEach { raw ->
+                            val fixed = normalizeUrl(raw, embed).replace(".txt", ".m3u8")
+                            if (!isAdUrl(fixed) && (isHlsLike(fixed) || fixed.contains(".mp4", true))) {
+                                emitVideo(
+                                    source = name,
+                                    streamUrl = fixed,
+                                    referer = embed,
+                                    callback = callback
+                                )
+                            }
+                        }
+                    }
+                }
             }
     }
 
-    private fun extractSubtitles(
-        text: String,
-        domain: String,
-        subtitleCallback: (SubtitleFile) -> Unit
+    private fun addCandidate(
+        raw: String,
+        baseUrl: String,
+        directLinks: MutableSet<String>,
+        embedLinks: MutableSet<String>
     ) {
-        val clean = text.cleanEscaped()
+        if (raw.isBlank()) return
 
-        Regex(
-            """"(?:lang|label)"\s*:\s*"([^"]+)"[^}]*?"(?:path|url|file)"\s*:\s*"([^"]+)"""",
-            RegexOption.IGNORE_CASE
-        ).findAll(clean).forEach { match ->
-            val label = match.groupValues[1].ifBlank { "Subtitle" }
-            val rawUrl = match.groupValues[2].cleanEscaped()
+        val fixed = normalizeUrl(raw.cleanEscaped(), baseUrl)
+            .replace(".txt", ".m3u8")
 
-            val subUrl = when {
-                rawUrl.startsWith("http", true) -> rawUrl
-                rawUrl.startsWith("//") -> "https:$rawUrl"
-                else -> domain.trimEnd('/') + "/" + rawUrl.trimStart('/')
-            }
+        if (fixed.isBlank() || isAdUrl(fixed)) return
 
-            subtitleCallback(
-                newSubtitleFile(
-                    label,
-                    subUrl
-                )
-            )
-        }
-
-        Regex(
-            """\\"(?:lang|label)\\":\\"([^\\"]+)\\"[^}]*?\\"(?:path|url|file)\\":\\"([^\\"]+)\\"""",
-            RegexOption.IGNORE_CASE
-        ).findAll(clean).forEach { match ->
-            val label = match.groupValues[1].ifBlank { "Subtitle" }
-            val rawUrl = match.groupValues[2].cleanEscaped()
-
-            val subUrl = when {
-                rawUrl.startsWith("http", true) -> rawUrl
-                rawUrl.startsWith("//") -> "https:$rawUrl"
-                else -> domain.trimEnd('/') + "/" + rawUrl.trimStart('/')
-            }
-
-            subtitleCallback(
-                newSubtitleFile(
-                    label,
-                    subUrl
-                )
-            )
+        when {
+            isHlsLike(fixed) || fixed.contains(".mp4", true) -> directLinks.add(fixed)
+            fixed.startsWith("http", true) -> embedLinks.add(fixed)
         }
     }
 }
@@ -327,15 +265,12 @@ private suspend fun emitVideo(
 
     if (isAdUrl(fixedStream)) return
 
-    val isHlsLike = fixedStream.contains(".m3u8", true) ||
-        isMajorplayConfig(fixedStream)
-
     callback(
         newExtractorLink(
             source = source,
             name = source,
             url = fixedStream,
-            type = if (isHlsLike) {
+            type = if (isHlsLike(fixedStream)) {
                 ExtractorLinkType.M3U8
             } else {
                 ExtractorLinkType.VIDEO
@@ -349,22 +284,30 @@ private suspend fun emitVideo(
     )
 }
 
-private fun extractStreamUrls(text: String): List<String> {
+private fun extractPlayableUrls(text: String): List<String> {
     val urls = linkedSetOf<String>()
-    val cleanText = text.cleanEscaped()
+    val clean = text.cleanEscaped()
 
     Regex(
         """https?://[^"'\\\s<>]+?\.(?:m3u8|mp4|txt)(?:\?[^"'\\\s<>]*)?""",
         RegexOption.IGNORE_CASE
-    ).findAll(cleanText)
+    ).findAll(clean)
         .map { it.value.cleanEscaped().replace(".txt", ".m3u8") }
         .filterNot { isAdUrl(it) }
         .forEach { urls.add(it) }
 
     Regex(
-        """https?%3A%2F%2F[^"'\\\s<>]+?(?:\.m3u8|\.mp4|\.txt)[^"'\\\s<>]*""",
+        """https?://[^"'\\\s<>]+?(?:majorplay|e2e\.majorplay|pm21|dm21|4meplayer|veev|hglink|hgcloud|luluvdoo|minochinos|dingtezuni|dintezuvio|mivalyo|movearnpre)[^"'\\\s<>]*""",
         RegexOption.IGNORE_CASE
-    ).findAll(cleanText)
+    ).findAll(clean)
+        .map { it.value.cleanEscaped() }
+        .filterNot { isAdUrl(it) }
+        .forEach { urls.add(it) }
+
+    Regex(
+        """https?%3A%2F%2F[^"'\\\s<>]+?(?:\.m3u8|\.mp4|\.txt|majorplay|pm21|dm21|4meplayer|veev|hglink|hgcloud|luluvdoo|minochinos|dingtezuni|dintezuvio|mivalyo|movearnpre)[^"'\\\s<>]*""",
+        RegexOption.IGNORE_CASE
+    ).findAll(clean)
         .map {
             runCatching {
                 URLDecoder.decode(it.value, "UTF-8")
@@ -375,15 +318,27 @@ private fun extractStreamUrls(text: String): List<String> {
         .forEach { urls.add(it) }
 
     Regex(
-        """(?:file|source|src|url|videoSource|videoUrl)\s*[:=]\s*["']([^"']+)["']""",
+        """(?:file|src|source|url|videoSource|videoUrl|embedUrl|embed_url)\s*[:=]\s*["']([^"']+)["']""",
         RegexOption.IGNORE_CASE
-    ).findAll(cleanText)
+    ).findAll(clean)
         .mapNotNull { it.groupValues.getOrNull(1) }
         .map { it.cleanEscaped().replace(".txt", ".m3u8") }
         .filter {
             it.contains(".m3u8", true) ||
                 it.contains(".mp4", true) ||
-                it.contains(".txt", true)
+                it.contains("majorplay", true) ||
+                it.contains("pm21", true) ||
+                it.contains("dm21", true) ||
+                it.contains("4meplayer", true) ||
+                it.contains("veev", true) ||
+                it.contains("hglink", true) ||
+                it.contains("hgcloud", true) ||
+                it.contains("luluvdoo", true) ||
+                it.contains("minochinos", true) ||
+                it.contains("dingtezuni", true) ||
+                it.contains("dintezuvio", true) ||
+                it.contains("mivalyo", true) ||
+                it.contains("movearnpre", true)
         }
         .filterNot { isAdUrl(it) }
         .forEach { urls.add(it) }
@@ -391,28 +346,54 @@ private fun extractStreamUrls(text: String): List<String> {
     return urls.toList()
 }
 
-private fun extractMajorplayConfigUrls(text: String): List<String> {
-    val urls = linkedSetOf<String>()
-    val cleanText = text.cleanEscaped()
+private fun extractSubtitles(
+    text: String,
+    domain: String,
+    subtitleCallback: (SubtitleFile) -> Unit
+) {
+    val clean = text.cleanEscaped()
 
     Regex(
-        """https?://[^"'\\\s<>]+?(?:majorplay|e2e\.majorplay)[^"'\\\s<>]*?config[^"'\\\s<>]*?\.json(?:\?[^"'\\\s<>]*)?""",
+        """"(?:lang|label)"\s*:\s*"([^"]+)"[^}]*?"(?:path|url|file)"\s*:\s*"([^"]+)"""",
         RegexOption.IGNORE_CASE
-    ).findAll(cleanText)
-        .map { it.value.cleanEscaped() }
-        .filterNot { isAdUrl(it) }
-        .forEach { urls.add(it) }
+    ).findAll(clean).forEach { match ->
+        val label = match.groupValues[1].ifBlank { "Subtitle" }
+        val rawUrl = match.groupValues[2].cleanEscaped()
+
+        val subUrl = when {
+            rawUrl.startsWith("http", true) -> rawUrl
+            rawUrl.startsWith("//") -> "https:$rawUrl"
+            else -> domain.trimEnd('/') + "/" + rawUrl.trimStart('/')
+        }
+
+        subtitleCallback(
+            newSubtitleFile(
+                label,
+                subUrl
+            )
+        )
+    }
 
     Regex(
-        """(?:url|src|file|source|videoSource|videoUrl)\s*[:=]\s*["']([^"']*config[^"']*\.json[^"']*)["']""",
+        """\\"(?:lang|label)\\":\\"([^\\"]+)\\"[^}]*?\\"(?:path|url|file)\\":\\"([^\\"]+)\\"""",
         RegexOption.IGNORE_CASE
-    ).findAll(cleanText)
-        .mapNotNull { it.groupValues.getOrNull(1) }
-        .map { it.cleanEscaped() }
-        .filterNot { isAdUrl(it) }
-        .forEach { urls.add(it) }
+    ).findAll(clean).forEach { match ->
+        val label = match.groupValues[1].ifBlank { "Subtitle" }
+        val rawUrl = match.groupValues[2].cleanEscaped()
 
-    return urls.toList()
+        val subUrl = when {
+            rawUrl.startsWith("http", true) -> rawUrl
+            rawUrl.startsWith("//") -> "https:$rawUrl"
+            else -> domain.trimEnd('/') + "/" + rawUrl.trimStart('/')
+        }
+
+        subtitleCallback(
+            newSubtitleFile(
+                label,
+                subUrl
+            )
+        )
+    }
 }
 
 private fun normalizeUrl(
@@ -431,24 +412,20 @@ private fun normalizeUrl(
                 ?: ""
             "$origin$clean"
         }
-        else -> {
-            runCatching {
-                URI(baseUrl).resolve(clean).toString()
-            }.getOrElse {
-                val origin = Regex("""^https?://[^/]+""")
-                    .find(baseUrl)
-                    ?.value
-                    ?: ""
-                if (origin.isNotBlank()) "$origin/$clean" else clean
-            }
-        }
+
+        else -> runCatching {
+            URI(baseUrl).resolve(clean).toString()
+        }.getOrDefault(clean)
     }
 }
 
-private fun isMajorplayConfig(url: String): Boolean {
-    return url.contains("majorplay", true) &&
-        url.contains("config", true) &&
-        url.contains(".json", true)
+private fun isHlsLike(url: String): Boolean {
+    return url.contains(".m3u8", true) ||
+        (
+            url.contains("majorplay", true) &&
+                url.contains("config", true) &&
+                url.contains(".json", true)
+            )
 }
 
 private fun isAdUrl(url: String): Boolean {
@@ -457,7 +434,9 @@ private fun isAdUrl(url: String): Boolean {
         url.contains("qq288", true) ||
         url.contains("sngine", true) ||
         url.contains("/content/uploads/videos/", true) ||
-        url.contains("demo.sngine.com", true)
+        url.contains("demo.sngine.com", true) ||
+        url.contains("doubleclick", true) ||
+        url.contains("googlesyndication", true)
 }
 
 private fun qualityFromUrl(url: String): Int {
