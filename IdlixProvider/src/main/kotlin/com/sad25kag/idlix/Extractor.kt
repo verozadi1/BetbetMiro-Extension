@@ -1,4 +1,4 @@
-package com.BetbetMiro.idlix
+package com.sad25kag.idlix
 
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.USER_AGENT

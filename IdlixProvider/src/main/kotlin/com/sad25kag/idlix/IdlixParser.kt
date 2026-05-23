@@ -1,4 +1,4 @@
-package com.BetbetMiro.idlix
+package com.sad25kag.idlix
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
