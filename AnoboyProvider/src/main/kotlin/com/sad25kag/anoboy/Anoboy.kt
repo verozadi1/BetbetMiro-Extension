@@ -668,6 +668,16 @@ class Anoboy : MainAPI() {
     ): Boolean {
         val refererPrefix = "anoboyref::"
         val multiPrefix = "multi::"
+        val browserHeaders = mapOf(
+            "User-Agent" to USER_AGENT,
+            "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language" to "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7"
+        )
+        val mediaHeaders = mapOf(
+            "User-Agent" to USER_AGENT,
+            "Accept" to "*/*"
+        )
+
         val hasEmbeddedReferer = data.startsWith(refererPrefix)
         val resolvedData = if (hasEmbeddedReferer) {
             data.removePrefix(refererPrefix)
@@ -689,13 +699,13 @@ class Anoboy : MainAPI() {
         } else {
             resolvedData
         }
+
         val isMulti = requestData.startsWith(multiPrefix)
         val requestReferer = extractedReferer ?: if (isMulti) mainUrl else requestData
-        val document = if (isMulti) null else app.get(requestData, referer = requestReferer).document
         val discoveredUrls = linkedSetOf<String>()
-        val queuedUrls = ArrayDeque<String>()
+        val queuedUrls = ArrayDeque<Pair<String, String>>()
         val crawledUrls = mutableSetOf<String>()
-        val seedUrls = mutableListOf<String>()
+        var foundLinks = false
 
         fun isValidUrl(raw: String?): Boolean {
             val clean = raw?.trim().orEmpty()
@@ -707,14 +717,28 @@ class Anoboy : MainAPI() {
 
         fun resolveUrl(raw: String?, base: String): String? {
             if (!isValidUrl(raw)) return null
+
             var clean = raw!!.trim()
+                .replace("\\/", "/")
+                .replace("&amp;", "&")
+                .replace("&quot;", "\"")
+                .trim('"', '\'', ' ')
+
             if (clean.contains("/uploads/stream/", true) && clean.contains("data=", true)) {
                 clean = clean.replace(" ", "+")
             }
+
             return try {
                 when {
                     clean.startsWith("http://", true) || clean.startsWith("https://", true) -> clean
                     clean.startsWith("//") -> "https:$clean"
+                    clean.startsWith("/") -> {
+                        val origin = Regex("""^https?://[^/]+""")
+                            .find(base)
+                            ?.value
+                            ?: mainUrl
+                        "$origin$clean"
+                    }
                     else -> URI(base).resolve(clean).toString()
                 }
             } catch (_: Exception) {
@@ -726,195 +750,284 @@ class Anoboy : MainAPI() {
             }
         }
 
-        fun queueUrl(raw: String?, base: String) {
+        fun queueUrl(raw: String?, base: String, referer: String = base) {
             val resolved = resolveUrl(raw, base) ?: return
-            seedUrls.add(resolved)
-            if (discoveredUrls.add(resolved)) queuedUrls.add(resolved)
+            if (discoveredUrls.add(resolved)) queuedUrls.add(resolved to referer)
         }
 
-        fun isDirectResolvableUrl(url: String): Boolean {
+        fun isDirectMedia(url: String): Boolean {
+            val lower = url.lowercase()
+            return lower.contains(".m3u8", true) ||
+                lower.contains(".mp4", true) ||
+                lower.contains(".webm", true) ||
+                lower.contains("googlevideo.com/videoplayback", true) ||
+                lower.contains("blogger.googleusercontent.com", true)
+        }
+
+        fun isKnownEmbed(url: String): Boolean {
             val lower = url.lowercase()
             return lower.contains("blogger.com/video.g") ||
                 lower.contains("blogger.googleusercontent.com") ||
-                lower.contains("/uploads/adsbatch") ||
-                lower.contains("/uploads/acbatch") ||
-                lower.contains("/uploads/yupbatch") ||
-                lower.contains("/uploads/stream/embed.php") ||
                 lower.contains("yourupload.com/embed/") ||
                 lower.contains("yourupload.com/watch/") ||
-                lower.endsWith(".mp4") ||
-                lower.endsWith(".m3u8")
+                lower.contains("dood.") ||
+                lower.contains("doodstream") ||
+                lower.contains("streamtape") ||
+                lower.contains("filemoon") ||
+                lower.contains("streamwish") ||
+                lower.contains("wishfast") ||
+                lower.contains("vidhide") ||
+                lower.contains("vidguard") ||
+                lower.contains("voe.") ||
+                lower.contains("mixdrop") ||
+                lower.contains("mp4upload") ||
+                lower.contains("ok.ru") ||
+                lower.contains("sendvid") ||
+                lower.contains("mega.nz")
+        }
+
+        fun extractRawUrls(text: String): List<String> {
+            val clean = text
+                .replace("\\/", "/")
+                .replace("&amp;", "&")
+                .replace("&quot;", "\"")
+                .replace("&#34;", "\"")
+
+            val results = linkedSetOf<String>()
+
+            Regex(
+                """https?://[^"'\\\s<>]+?(?:\.m3u8|\.mp4|\.webm)(?:\?[^"'\\\s<>]*)?""",
+                RegexOption.IGNORE_CASE
+            ).findAll(clean).forEach { results.add(it.value) }
+
+            Regex(
+                """//[^"'\\\s<>]+?(?:\.m3u8|\.mp4|\.webm)(?:\?[^"'\\\s<>]*)?""",
+                RegexOption.IGNORE_CASE
+            ).findAll(clean).forEach { results.add("https:${it.value}") }
+
+            Regex(
+                """https?://[^"'\\\s<>]+?(?:blogger\.com/video\.g|blogger\.googleusercontent\.com|yourupload\.com/(?:embed|watch)|dood(?:stream)?\.|streamtape|filemoon|streamwish|wishfast|vidhide|vidguard|voe\.|mixdrop|mp4upload|ok\.ru|sendvid|mega\.nz)[^"'\\\s<>]*""",
+                RegexOption.IGNORE_CASE
+            ).findAll(clean).forEach { results.add(it.value) }
+
+            Regex(
+                """(?:file|src|source|url|data-video|data-src|data-url|data-embed|data-iframe)\s*[:=]\s*["']([^"']+)["']""",
+                RegexOption.IGNORE_CASE
+            ).findAll(clean)
+                .mapNotNull { it.groupValues.getOrNull(1) }
+                .filter { it.startsWith("http", true) || it.startsWith("//") || it.startsWith("/") }
+                .forEach { results.add(it) }
+
+            return results.toList()
+        }
+
+        suspend fun emitDirectMedia(url: String, referer: String): Boolean {
+            val lower = url.lowercase()
+            return try {
+                when {
+                    lower.contains(".m3u8", true) -> {
+                        generateM3u8(
+                            source = name,
+                            streamUrl = url,
+                            referer = referer,
+                            headers = mediaHeaders + mapOf("Referer" to referer),
+                            name = name
+                        ).forEach(callback)
+                        true
+                    }
+
+                    lower.contains(".mp4", true) ||
+                        lower.contains(".webm", true) ||
+                        lower.contains("googlevideo.com/videoplayback", true) ||
+                        lower.contains("blogger.googleusercontent.com", true) -> {
+                        callback(
+                            newExtractorLink(
+                                source = name,
+                                name = name,
+                                url = url,
+                                type = ExtractorLinkType.VIDEO
+                            ) {
+                                this.referer = referer
+                                this.quality = getQualityFromName(url)
+                                this.headers = mediaHeaders + mapOf("Referer" to referer)
+                            }
+                        )
+                        true
+                    }
+
+                    else -> false
+                }
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+        suspend fun emitOrLoad(url: String, referer: String): Boolean {
+            if (emitDirectMedia(url, referer)) return true
+
+            return try {
+                loadExtractor(url, referer, subtitleCallback, callback)
+            } catch (_: Exception) {
+                false
+            }
         }
 
         fun extractFromDoc(baseUrl: String, doc: org.jsoup.nodes.Document) {
-            doc.select("iframe#mediaplayer, iframe#videoembed, div.player-embed iframe, iframe[src], iframe[data-src], iframe[data-litespeed-src]")
-                .forEach { queueUrl(it.getIframeAttr(), baseUrl) }
+            doc.select(
+                "iframe#mediaplayer, iframe#videoembed, div.player-embed iframe, " +
+                    "iframe[src], iframe[data-src], iframe[data-litespeed-src], iframe[data-lazy-src]"
+            ).forEach { queueUrl(it.getIframeAttr(), baseUrl) }
 
-            doc.select("a[href*=\"yourupload.com/embed/\"], a[href*=\"yourupload.com/watch/\"], a[href*=\"www.yourupload.com/embed/\"], a[href*=\"www.yourupload.com/watch/\"]")
-                .forEach { queueUrl(it.attr("href"), baseUrl) }
+            doc.select(
+                "video[src], video[data-src], video source[src], source[src], " +
+                    "a[href*='.m3u8'], a[href*='.mp4'], a[href*='.webm']"
+            ).forEach { element ->
+                queueUrl(element.attr("src"), baseUrl)
+                queueUrl(element.attr("data-src"), baseUrl)
+                queueUrl(element.attr("href"), baseUrl)
+            }
+
+            doc.select(
+                "a[href*=\"yourupload.com/embed/\"], a[href*=\"yourupload.com/watch/\"], " +
+                    "a[href*=\"www.yourupload.com/embed/\"], a[href*=\"www.yourupload.com/watch/\"], " +
+                    "a[href*=\"blogger.com/video.g\"], a[href*=\"blogger.googleusercontent.com\"], " +
+                    "a[href*=\"dood\"], a[href*=\"streamtape\"], a[href*=\"filemoon\"], " +
+                    "a[href*=\"streamwish\"], a[href*=\"wishfast\"], a[href*=\"vidhide\"], " +
+                    "a[href*=\"vidguard\"], a[href*=\"voe.\"], a[href*=\"mixdrop\"], a[href*=\"mp4upload\"]"
+            ).forEach { queueUrl(it.attr("href"), baseUrl) }
 
             doc.select(
                 "a[href*=\"/uploads/stream/embed.php\"], " +
                     "a[href*=\"/uploads/acbatch.php\"], " +
                     "a[href*=\"/uploads/adsbatch\"], " +
                     "a[href*=\"/uploads/yupbatch\"], " +
-                    "a[href*=\"blogger.com/video.g\"], " +
-                    "a[href*=\"blogger.googleusercontent.com\"]"
+                    "a[href*=\"/uploads/\"]"
             ).forEach { queueUrl(it.attr("href"), baseUrl) }
 
-            doc.select("#fplay a#allmiror[data-video], #fplay a[data-video], a#allmiror[data-video], a[data-video], [data-video]")
-                .forEach { anchor ->
-                    queueUrl(anchor.attr("data-video"), baseUrl)
-                    queueUrl(anchor.attr("href"), baseUrl)
-                }
-
-            doc.select("[data-embed], [data-iframe], [data-url], [data-src]")
-                .forEach { el ->
-                    queueUrl(el.attr("data-embed"), baseUrl)
-                    queueUrl(el.attr("data-iframe"), baseUrl)
-                    queueUrl(el.attr("data-url"), baseUrl)
-                    queueUrl(el.attr("data-src"), baseUrl)
-                }
+            doc.select(
+                "#fplay a#allmiror[data-video], #fplay a[data-video], a#allmiror[data-video], " +
+                    "a[data-video], [data-video], [data-embed], [data-iframe], [data-url], [data-src]"
+            ).forEach { el ->
+                queueUrl(el.attr("data-video"), baseUrl)
+                queueUrl(el.attr("data-embed"), baseUrl)
+                queueUrl(el.attr("data-iframe"), baseUrl)
+                queueUrl(el.attr("data-url"), baseUrl)
+                queueUrl(el.attr("data-src"), baseUrl)
+                queueUrl(el.attr("href"), baseUrl)
+            }
 
             doc.select("div.download a.udl[href], div.download a[href], div.dlbox li span.e a[href]")
                 .forEach { queueUrl(it.attr("href"), baseUrl) }
 
-            val bloggerRegex = Regex("""https?://(?:www\.)?blogger\.com/video\.g\?[^"'<\s]+""", RegexOption.IGNORE_CASE)
-            val batchRegex = Regex("""/uploads/(?:adsbatch[^"'\s]+|yupbatch[^"'\s]+|acbatch[^"'\s]+|stream/embed\.php\?[^"'\s]+)""", RegexOption.IGNORE_CASE)
-            val yourUploadRegex = Regex("""https?://(?:www\.)?yourupload\.com/(?:embed|watch)/[^"'<\s]+""", RegexOption.IGNORE_CASE)
-            doc.select("script").forEach { script ->
-                val scriptData = script.data()
-                bloggerRegex.findAll(scriptData).forEach { match ->
-                    queueUrl(match.value, baseUrl)
+            doc.select("select.mirror option[value], option[value]").forEach { option ->
+                val value = option.attr("value").trim()
+                if (value.isBlank()) return@forEach
+
+                if (value.startsWith("http", true) || value.startsWith("/") || value.startsWith("//")) {
+                    queueUrl(value, baseUrl)
+                    return@forEach
                 }
-                batchRegex.findAll(scriptData).forEach { match ->
-                    queueUrl(match.value, baseUrl)
-                }
-                yourUploadRegex.findAll(scriptData).forEach { match ->
-                    queueUrl(match.value, baseUrl)
+
+                runCatching {
+                    val decodedHtml = base64Decode(value.replace("\\s".toRegex(), ""))
+                    val decodedDoc = Jsoup.parse(decodedHtml)
+                    decodedDoc.select("iframe[src], iframe[data-src], source[src], video[src], a[href], [data-video], [data-src], [data-url]")
+                        .forEach { el ->
+                            queueUrl(el.getIframeAttr(), baseUrl)
+                            queueUrl(el.attr("src"), baseUrl)
+                            queueUrl(el.attr("href"), baseUrl)
+                            queueUrl(el.attr("data-video"), baseUrl)
+                            queueUrl(el.attr("data-src"), baseUrl)
+                            queueUrl(el.attr("data-url"), baseUrl)
+                        }
+                    extractRawUrls(decodedHtml).forEach { queueUrl(it, baseUrl) }
                 }
             }
+
+            doc.select("script").forEach { script ->
+                val scriptData = script.data().ifBlank { script.html() }
+                extractRawUrls(scriptData).forEach { queueUrl(it, baseUrl) }
+            }
+
+            extractRawUrls(doc.html()).forEach { queueUrl(it, baseUrl) }
         }
 
         fun shouldCrawl(url: String): Boolean {
             val lower = url.lowercase()
-            if (lower.contains("blogger.com/video.g")) return false
-            if (lower.endsWith(".mp4") || lower.endsWith(".m3u8")) return false
-            return lower.contains("anoboy.boo") ||
+            if (isDirectMedia(url) || isKnownEmbed(url)) return false
+
+            val host = runCatching { URI(url).host.orEmpty().lowercase() }.getOrDefault("")
+            val mainHost = runCatching { URI(mainUrl).host.orEmpty().lowercase() }.getOrDefault("")
+
+            return host == mainHost ||
+                host.endsWith(".anoboy.be") ||
+                host.contains("anoboy") ||
                 lower.contains("/uploads/") ||
                 lower.contains("adsbatch") ||
-                lower.contains("yupbatch")
+                lower.contains("yupbatch") ||
+                lower.contains("acbatch") ||
+                lower.contains("/stream/embed.php")
         }
 
-        if (!isMulti && isDirectResolvableUrl(requestData)) {
-            queueUrl(requestData, requestReferer)
+        suspend fun fetchDoc(pageUrl: String, referer: String): org.jsoup.nodes.Document? {
+            val referers = listOf(referer, requestReferer, mainUrl).filter { it.isNotBlank() }.distinct()
+            for (ref in referers) {
+                val doc = runCatching {
+                    app.get(
+                        pageUrl,
+                        headers = browserHeaders,
+                        referer = ref,
+                        timeout = 20L
+                    ).document
+                }.getOrNull()
+                if (doc != null) return doc
+            }
+            return null
         }
 
-        if (document != null) {
-            extractFromDoc(requestData, document)
-        }
         if (isMulti) {
             requestData.removePrefix(multiPrefix)
                 .split("||")
                 .map { it.trim() }
                 .filter { it.isNotBlank() }
-                .forEach { queueUrl(it, mainUrl) }
+                .forEach { queueUrl(it, mainUrl, requestReferer) }
+        } else {
+            queueUrl(requestData, requestReferer, requestReferer)
+
+            val document = runCatching {
+                app.get(
+                    requestData,
+                    headers = browserHeaders,
+                    referer = requestReferer,
+                    timeout = 20L
+                ).document
+            }.getOrNull()
+
+            if (document != null) {
+                extractFromDoc(requestData, document)
+            }
         }
 
         var safety = 0
-        while (queuedUrls.isNotEmpty() && safety++ < 120) {
-            val next = queuedUrls.removeFirst()
+        while (queuedUrls.isNotEmpty() && safety++ < 160) {
+            val (next, referer) = queuedUrls.removeFirst()
+
+            if (isDirectMedia(next) || isKnownEmbed(next)) {
+                if (emitOrLoad(next, referer)) foundLinks = true
+                continue
+            }
+
             if (!shouldCrawl(next) || !crawledUrls.add(next)) continue
-            try {
-                val nestedDoc = app.get(next, referer = requestReferer).document
-                extractFromDoc(next, nestedDoc)
-            } catch (_: Exception) {
-            }
+
+            val nestedDoc = fetchDoc(next, referer) ?: continue
+            extractFromDoc(next, nestedDoc)
         }
-
-        if (discoveredUrls.isEmpty() && document != null) {
-            val mirrorOptions = document.select("select.mirror option[value]:not([disabled])")
-            for (opt in mirrorOptions) {
-                val base64 = opt.attr("value")
-                if (base64.isBlank()) continue
-                try {
-                    val decodedHtml = base64Decode(base64.replace("\\s".toRegex(), ""))
-                    Jsoup.parse(decodedHtml).selectFirst("iframe")?.getIframeAttr()?.let { iframe ->
-                        queueUrl(iframe, requestReferer)
-                    }
-                } catch (_: Exception) {
-                }
-            }
-        }
-
-        suspend fun resolveLegacyMirrorPage(pageUrl: String): Boolean {
-            val lower = pageUrl.lowercase()
-            val isLegacyMirrorPage = lower.contains("/uploads/adsbatch") ||
-                lower.contains("/uploads/acbatch") ||
-                lower.contains("/uploads/yupbatch") ||
-                lower.contains("/uploads/stream/embed.php")
-            if (!isLegacyMirrorPage) return false
-
-            val doc = runCatching {
-                app.get(pageUrl, referer = requestReferer).document
-            }.getOrNull() ?: return false
-
-            val resolvedCandidates = linkedSetOf<String>()
-            fun addCandidate(raw: String?) {
-                val resolved = resolveUrl(raw, pageUrl) ?: return
-                resolvedCandidates.add(resolved)
-            }
-
-            doc.select("iframe[src], iframe[data-src], iframe[data-litespeed-src]")
-                .forEach { addCandidate(it.getIframeAttr()) }
-            doc.select("a[href], [data-video], [data-src], [data-url], [data-iframe], [data-embed]")
-                .forEach { el ->
-                    addCandidate(el.attr("href"))
-                    addCandidate(el.attr("data-video"))
-                    addCandidate(el.attr("data-src"))
-                    addCandidate(el.attr("data-url"))
-                    addCandidate(el.attr("data-iframe"))
-                    addCandidate(el.attr("data-embed"))
-                }
-
-            val bloggerRegex = Regex("""https?://(?:www\.)?blogger\.com/video\.g\?[^"'<\s]+""", RegexOption.IGNORE_CASE)
-            val fileRegex = Regex("""https?://[^\s"'<>]+""", RegexOption.IGNORE_CASE)
-            doc.select("script").forEach { script ->
-                val scriptData = script.data()
-                bloggerRegex.findAll(scriptData).forEach { addCandidate(it.value) }
-                fileRegex.findAll(scriptData).forEach { addCandidate(it.value) }
-            }
-
-            var resolvedAny = false
-            resolvedCandidates.forEach { candidate ->
-                if (candidate != pageUrl) {
-                    loadExtractor(candidate, pageUrl, subtitleCallback, callback)
-                    resolvedAny = true
-                }
-            }
-
-            return resolvedAny
-        }
-
-        seedUrls
-            .distinct()
-            .filter {
-                val lower = it.lowercase()
-                lower.contains("/uploads/adsbatch") ||
-                    lower.contains("/uploads/acbatch") ||
-                    lower.contains("/uploads/yupbatch") ||
-                    lower.contains("/uploads/stream/embed.php")
-            }
-            .forEach { resolveLegacyMirrorPage(it) }
 
         discoveredUrls.distinct().forEach { link ->
-            val resolvedLegacy = resolveLegacyMirrorPage(link)
-            if (!resolvedLegacy) {
-                loadExtractor(link, requestReferer, subtitleCallback, callback)
-            }
+            if (emitOrLoad(link, requestReferer)) foundLinks = true
         }
 
-        return true
+        return foundLinks
     }
 
     private fun Element.getImageAttr(): String {
