@@ -62,28 +62,26 @@ class DeepGoreTube : MainAPI() {
         }
     }
 
-    // PERBAIKAN 1: Menukar posisi parameter subtitleCallback dan callback
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
         val document = app.get(data).document
 
         val videoSrc = document.selectFirst("video source")?.attr("src") ?: document.selectFirst("video")?.attr("src")
 
         if (videoSrc != null) {
-            // PERBAIKAN 2: Menggunakan newExtractorLink menggantikan ExtractorLink
             callback.invoke(
                 newExtractorLink(
                     source = name,
                     name = name,
-                    url = fixUrl(videoSrc),
-                    referer = mainUrl,
-                    quality = Qualities.Unknown.value,
-                    isM3u8 = videoSrc.contains(".m3u8")
-                )
+                    url = fixUrl(videoSrc)
+                ) {
+                    this.referer = mainUrl
+                    this.quality = Qualities.Unknown.value
+                    this.isM3u8 = videoSrc.contains(".m3u8")
+                }
             )
         } else {
             val iframeSrc = document.selectFirst("iframe")?.attr("src")
             if (iframeSrc != null) {
-                // Di sini posisi subtitleCallback dan callback juga mengikuti perubahan urutan terbaru
                 loadExtractor(fixUrl(iframeSrc), mainUrl, subtitleCallback, callback)
             }
         }
