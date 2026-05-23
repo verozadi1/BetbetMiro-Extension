@@ -1,14 +1,23 @@
-version = 3
+version = 2
 
 cloudstream {
+    description = "AnoBoy — Streaming Anime Subtitle Indonesia"
     language = "id"
     authors = listOf("BetbetMiro")
-    description = "AutoEmbed provider berbasis TMDB dengan kategori film, serial, dan genre Indonesia"
+
+    /**
+     * Status int as the following:
+     * 0: Down
+     * 1: Ok
+     * 2: Slow
+     * 3: Beta only
+     * */
     status = 1
     tvTypes = listOf(
-        "Movie",
-        "TvSeries",
+        "AnimeMovie",
+        "OVA",
+        "Anime",
     )
-    iconUrl = "https://www.themoviedb.org/favicon.ico"
-    isCrossPlatform = false
+
+    iconUrl = "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://ww1.anoboy.boo&size=%size%"
 }
