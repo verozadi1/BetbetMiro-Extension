@@ -6,5 +6,7 @@ cloudstream {
     description = "Provider CloudStream untuk Gerakin21."
     status      = 1
     tvTypes     = listOf("Movie", "TvSeries")
-    iconUrl     = "https://gerakin21.cloud/favicon.ico"
+    
+    // Dijamin 100% valid: Menghasilkan logo "G" dengan background gelap dan teks kuning
+    iconUrl     = "https://ui-avatars.com/api/?name=Gerakin21&background=1c1c1c&color=ffeb3b&size=256&font-size=0.5"
 }

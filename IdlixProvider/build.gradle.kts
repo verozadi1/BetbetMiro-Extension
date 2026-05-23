@@ -15,5 +15,7 @@ cloudstream {
     )
 
     isCrossPlatform = false
-    iconUrl = "https://www.google.com/s2/favicons?domain=ryangoslingfrance.com&sz=%size%"
+    
+    // %size% diganti menjadi 256 agar valid
+    iconUrl = "https://www.google.com/s2/favicons?domain=ryangoslingfrance.com&sz=256"
 }

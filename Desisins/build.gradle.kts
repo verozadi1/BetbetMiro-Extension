@@ -2,7 +2,7 @@ version = 6
 
 cloudstream {
     authors = listOf("BetbetMiro")
-    language = "hi"
+    language = "id"
     description = "18+ webseries clips from Desisins."
 
     /**

@@ -21,6 +21,6 @@ cloudstream {
         "AsianDrama"
     )
 
-    // %size% diganti menjadi angka pasti (256) agar icon valid dan jernih
-    iconUrl = "https://www.google.com/s2/favicons?domain=filmapik.fitness&sz=256"
+    // Dijamin 100% valid: Menghasilkan logo huruf "F" dengan background abu-abu gelap dan teks biru terang
+    iconUrl = "https://ui-avatars.com/api/?name=Filmapik&background=212121&color=03a9f4&size=256&font-size=0.5"
 }
