@@ -25,7 +25,6 @@ class DeepGoreTube : MainAPI() {
 
         val document = app.get(url).document
         
-        // Umumnya situs berbasis blog pakai class .post atau article
         val home = document.select("article, .post, .video-item").mapNotNull { it.toSearchResult() }
 
         return newHomePageResponse(
@@ -63,15 +62,16 @@ class DeepGoreTube : MainAPI() {
         }
     }
 
-    override suspend fun loadLinks(data: String, isCasting: Boolean, callback: (ExtractorLink) -> Unit, subtitleCallback: (SubtitleFile) -> Unit): Boolean {
+    // PERBAIKAN 1: Menukar posisi parameter subtitleCallback dan callback
+    override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
         val document = app.get(data).document
 
-        // Mengincar link video mp4 mentah yang sering digunakan situs self-host
         val videoSrc = document.selectFirst("video source")?.attr("src") ?: document.selectFirst("video")?.attr("src")
 
         if (videoSrc != null) {
+            // PERBAIKAN 2: Menggunakan newExtractorLink menggantikan ExtractorLink
             callback.invoke(
-                ExtractorLink(
+                newExtractorLink(
                     source = name,
                     name = name,
                     url = fixUrl(videoSrc),
@@ -81,9 +81,9 @@ class DeepGoreTube : MainAPI() {
                 )
             )
         } else {
-            // Fallback kalau ternyata mereka pakai iframe
             val iframeSrc = document.selectFirst("iframe")?.attr("src")
             if (iframeSrc != null) {
+                // Di sini posisi subtitleCallback dan callback juga mengikuti perubahan urutan terbaru
                 loadExtractor(fixUrl(iframeSrc), mainUrl, subtitleCallback, callback)
             }
         }
