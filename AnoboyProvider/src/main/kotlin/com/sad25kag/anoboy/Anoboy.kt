@@ -826,13 +826,18 @@ class Anoboy : MainAPI() {
             return try {
                 when {
                     lower.contains(".m3u8", true) -> {
-                        generateM3u8(
-                            source = name,
-                            streamUrl = url,
-                            referer = referer,
-                            headers = mediaHeaders + mapOf("Referer" to referer),
-                            name = name
-                        ).forEach(callback)
+                        callback(
+                            newExtractorLink(
+                                source = name,
+                                name = name,
+                                url = url,
+                                type = ExtractorLinkType.M3U8
+                            ) {
+                                this.referer = referer
+                                this.quality = Qualities.Unknown.value
+                                this.headers = mediaHeaders + mapOf("Referer" to referer)
+                            }
+                        )
                         true
                     }
 
