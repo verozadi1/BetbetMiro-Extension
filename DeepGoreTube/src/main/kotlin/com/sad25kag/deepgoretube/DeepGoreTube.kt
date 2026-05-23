@@ -72,12 +72,11 @@ class DeepGoreTube : MainAPI() {
                 newExtractorLink(
                     source = name,
                     name = name,
-                    url = fixUrl(videoSrc)
-                ) {
-                    this.referer = mainUrl
-                    this.quality = Qualities.Unknown.value
-                    this.isM3u8 = videoSrc.contains(".m3u8")
-                }
+                    url = fixUrl(videoSrc),
+                    referer = mainUrl,
+                    quality = Qualities.Unknown.value,
+                    isM3u8 = videoSrc.contains(".m3u8")
+                )
             )
         } else {
             val iframeSrc = document.selectFirst("iframe")?.attr("src")
