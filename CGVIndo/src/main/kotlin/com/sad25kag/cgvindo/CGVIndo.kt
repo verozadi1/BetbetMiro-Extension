@@ -1,4 +1,4 @@
-package com.cgvindo
+package com.sad25kag.cgvindo
 
 import com.lagradost.cloudstream3.Episode
 import com.lagradost.cloudstream3.HomePageResponse

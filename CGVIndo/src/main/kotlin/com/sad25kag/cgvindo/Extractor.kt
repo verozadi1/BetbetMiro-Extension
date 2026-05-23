@@ -1,4 +1,4 @@
-package com.cgvindo
+package com.sad25kag.cgvindo
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.SubtitleFile

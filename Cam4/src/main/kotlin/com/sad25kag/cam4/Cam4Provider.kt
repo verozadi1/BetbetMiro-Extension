@@ -1,4 +1,4 @@
-package com.cam4
+package com.sad25kag.cam4
 
 import android.net.Uri
 import com.fasterxml.jackson.annotation.JsonProperty

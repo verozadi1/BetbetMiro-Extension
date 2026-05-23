@@ -1,6 +1,6 @@
 @file:OptIn(Prerelease::class)
 
-package com.cncverse
+package com.sad25kag.bilibili
 
 import android.content.Context
 import android.util.Log

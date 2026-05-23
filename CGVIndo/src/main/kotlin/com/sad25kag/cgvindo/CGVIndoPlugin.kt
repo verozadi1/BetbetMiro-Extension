@@ -1,12 +1,14 @@
-package com.cam4
+package com.sad25kag.cgvindo
 
 import android.content.Context
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
 
 @CloudstreamPlugin
-class Cam4Plugin : Plugin() {
+class CGVIndoPlugin : Plugin() {
     override fun load(context: Context) {
-        registerMainAPI(Cam4Provider())
+        registerMainAPI(CGVIndo())
+        registerExtractorAPI(Jeniusplay())
+        registerExtractorAPI(Majorplay())
     }
 }

@@ -1,13 +1,12 @@
-package com.cncverse
+package com.sad25kag.cam4
 
+import android.content.Context
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
-import android.content.Context
 
 @CloudstreamPlugin
-class BilibiliProviderPlugin: Plugin() {
+class Cam4Plugin : Plugin() {
     override fun load(context: Context) {
-        BilibiliProvider.context = context
-        registerMainAPI(BilibiliProvider())
+        registerMainAPI(Cam4Provider())
     }
 }

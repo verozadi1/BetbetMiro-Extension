@@ -1,4 +1,4 @@
-package com.cdramayes
+package com.sad25kag.cdramayes
 
 import com.lagradost.cloudstream3.Episode
 import com.lagradost.cloudstream3.HomePageList

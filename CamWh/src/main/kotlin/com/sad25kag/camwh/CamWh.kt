@@ -1,4 +1,4 @@
-package com.kerimmkirac
+package com.sad25kag.camwh
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
