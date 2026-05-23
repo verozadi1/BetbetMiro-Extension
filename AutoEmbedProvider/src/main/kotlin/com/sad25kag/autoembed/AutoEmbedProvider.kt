@@ -13,6 +13,7 @@ import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.util.Locale
+import kotlinx.coroutines.runBlocking
 
 class AutoEmbedProvider : MainAPI() {
     override var mainUrl = "https://www.themoviedb.org"
@@ -276,23 +277,25 @@ class AutoEmbedProvider : MainAPI() {
                 loadExtractor(server.url, server.referer ?: server.url, subtitleCallback) { link ->
                     val key = "${server.name}|${link.name}|${link.url}"
                     if (emitted.add(key)) {
-                        callback.invoke(
-                            newExtractorLink(
-                                source = server.name,
-                                name = if (link.name.equals(server.name, ignoreCase = true)) {
-                                    server.name
-                                } else {
-                                    "${server.name} - ${link.name}"
-                                },
-                                url = link.url,
-                                type = link.type
-                            ) {
-                                quality = link.quality
-                                headers = link.headers
-                                extractorData = link.extractorData
-                                referer = link.referer
-                            }
-                        )
+                        runBlocking {
+                            callback.invoke(
+                                newExtractorLink(
+                                    source = server.name,
+                                    name = if (link.name.equals(server.name, ignoreCase = true)) {
+                                        server.name
+                                    } else {
+                                        "${server.name} - ${link.name}"
+                                    },
+                                    url = link.url,
+                                    type = link.type
+                                ) {
+                                    quality = link.quality
+                                    headers = link.headers
+                                    extractorData = link.extractorData
+                                    referer = link.referer
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -380,6 +383,19 @@ class AutoEmbedProvider : MainAPI() {
                 lower.contains("videoplayback?")
         }
 
+        fun inferQuality(raw: String): Int {
+            return when {
+                raw.contains("2160", true) || raw.contains("4k", true) -> 2160
+                raw.contains("1440", true) || raw.contains("2k", true) -> 1440
+                raw.contains("1080", true) || raw.contains("1k", true) -> 1080
+                raw.contains("720", true) -> 720
+                raw.contains("480", true) -> 480
+                raw.contains("360", true) -> 360
+                raw.contains("240", true) -> 240
+                else -> 0
+            }
+        }
+
         fun shouldCrawl(raw: String): Boolean {
             if (isBlocked(raw) || isDirectMedia(raw)) return false
 
@@ -443,7 +459,7 @@ class AutoEmbedProvider : MainAPI() {
                 }
         }
 
-        fun emitDirect(raw: String, referer: String): Boolean {
+        suspend fun emitDirect(raw: String, referer: String): Boolean {
             if (!isDirectMedia(raw) || isBlocked(raw)) return false
 
             val mediaType = if (raw.contains(".m3u8", true)) {
@@ -460,15 +476,7 @@ class AutoEmbedProvider : MainAPI() {
                     type = mediaType
                 ) {
                     this.referer = referer
-                    this.quality = getQualityFromName(raw).takeIf {
-                        it != Qualities.Unknown.value
-                    } ?: when {
-                        raw.contains("1080", true) -> Qualities.P1080.value
-                        raw.contains("720", true) -> Qualities.P720.value
-                        raw.contains("480", true) -> Qualities.P480.value
-                        raw.contains("360", true) -> Qualities.P360.value
-                        else -> Qualities.Unknown.value
-                    }
+                    this.quality = inferQuality(raw)
                     this.headers = mapOf(
                         "User-Agent" to USER_AGENT,
                         "Referer" to referer,
@@ -498,19 +506,21 @@ class AutoEmbedProvider : MainAPI() {
             if (!shouldCrawl(next)) {
                 runCatching {
                     loadExtractor(next, referer, subtitleCallback) { link ->
-                        callback.invoke(
-                            newExtractorLink(
-                                source = server.name,
-                                name = if (link.name.equals(server.name, ignoreCase = true)) server.name else "${server.name} - ${link.name}",
-                                url = link.url,
-                                type = link.type
-                            ) {
-                                quality = link.quality
-                                headers = link.headers
-                                extractorData = link.extractorData
-                                this.referer = link.referer
-                            }
-                        )
+                        runBlocking {
+                            callback.invoke(
+                                newExtractorLink(
+                                    source = server.name,
+                                    name = if (link.name.equals(server.name, ignoreCase = true)) server.name else "${server.name} - ${link.name}",
+                                    url = link.url,
+                                    type = link.type
+                                ) {
+                                    quality = link.quality
+                                    headers = link.headers
+                                    extractorData = link.extractorData
+                                    this.referer = link.referer
+                                }
+                            )
+                        }
                         emitted = true
                     }
                 }
