@@ -116,8 +116,9 @@ class BioskopKeren : MainAPI() {
     private val playerHosts = listOf(
         "streaming.kebioskop21.pro",
         "abyss.to",
-        "short.icu",
         "abysscdn.com",
+        "short.icu",
+        "short.ink",
         "iamcdn.net"
     )
 
@@ -592,9 +593,7 @@ class BioskopKeren : MainAPI() {
 
         fun queueEmbed(raw: String?, baseUrl: String, referer: String = baseUrl) {
             if (raw.isNullOrBlank()) return
-            val fixed = normalizeUrl(raw.cleanEscaped(), baseUrl)
-                .replace(".txt", ".m3u8")
-                .trim()
+            val fixed = normalizeUrl(raw.cleanEscaped(), baseUrl).trim()
 
             if (fixed.isBlank() || isAdUrl(fixed) || isBadPlayableUrl(fixed)) return
 
@@ -715,27 +714,41 @@ class BioskopKeren : MainAPI() {
         referer: String
     ): String {
         val pages = mutableListOf<String>()
+        val playerHeaders = headers + mapOf(
+            "Origin" to "https://streaming.kebioskop21.pro",
+            "Referer" to referer
+        )
 
         runCatching {
             app.get(
                 url,
-                headers = headers,
+                headers = playerHeaders,
                 referer = referer,
                 timeout = 30L
             ).text.cleanEscaped()
         }.getOrNull()?.let { pages.add(it) }
 
-        runCatching {
-            app.post(
-                url,
-                data = mapOf("play" to "play"),
-                headers = headers,
-                referer = referer,
-                timeout = 30L
-            ).text.cleanEscaped()
-        }.getOrNull()?.let { pages.add(it) }
+        // The current apidrive player exposes the real Abyss payload only after
+        // the play form is submitted. Try both common form variants.
+        listOf(
+            mapOf("play" to "play"),
+            mapOf("play" to "1"),
+            mapOf("submit" to "play")
+        ).forEach { form ->
+            runCatching {
+                app.post(
+                    url,
+                    data = form,
+                    headers = playerHeaders,
+                    referer = referer,
+                    timeout = 30L
+                ).text.cleanEscaped()
+            }.getOrNull()?.let { body ->
+                if (body.isNotBlank()) pages.add(body)
+            }
+        }
 
-        return pages.joinToString("\n")
+        return pages.distinct().joinToString("\n")
     }
 
     private fun extractSubtitles(
@@ -791,12 +804,12 @@ class BioskopKeren : MainAPI() {
         referer: String,
         callback: (ExtractorLink) -> Unit
     ) {
-        if (isAdUrl(link) || isBadPlayableUrl(link)) return
+        if (isAdUrl(link) || isBadPlayableUrl(link) || !isDirectMedia(link)) return
 
         callback(
             newExtractorLink(
                 source = name,
-                name = name,
+                name = if (isHlsLike(link)) "$name HLS" else name,
                 url = link,
                 type = if (isHlsLike(link)) {
                     ExtractorLinkType.M3U8
@@ -811,10 +824,7 @@ class BioskopKeren : MainAPI() {
                 this.headers = mapOf(
                     "User-Agent" to USER_AGENT,
                     "Referer" to referer,
-                    "Origin" to runCatching {
-                        val uri = URI(referer)
-                        "${uri.scheme}://${uri.host}"
-                    }.getOrDefault(mainUrl)
+                    "Accept" to "*/*"
                 )
             }
         )
@@ -825,15 +835,15 @@ class BioskopKeren : MainAPI() {
         val clean = text.cleanEscaped()
 
         Regex(
-            """https?://[^"'\\\s<>]+?\.(?:m3u8|mp4|txt)(?:\?[^"'\\\s<>]*)?""",
+            """https?://[^"'\\\s<>]+?\.(?:m3u8|mp4)(?:\?[^"'\\\s<>]*)?""",
             RegexOption.IGNORE_CASE
         ).findAll(clean)
-            .map { it.value.cleanEscaped().replace(".txt", ".m3u8") }
+            .map { it.value.cleanEscaped() }
             .filterNot { isAdUrl(it) || isBadPlayableUrl(it) }
             .forEach { urls.add(it) }
 
         Regex(
-            """https?%3A%2F%2F[^"'\\\s<>]+?(?:\.m3u8|\.mp4|\.txt|apidrive\.php)[^"'\\\s<>]*""",
+            """https?%3A%2F%2F[^"'\\\s<>]+?(?:\.m3u8|\.mp4|apidrive\.php)[^"'\\\s<>]*""",
             RegexOption.IGNORE_CASE
         ).findAll(clean)
             .map {
@@ -841,7 +851,7 @@ class BioskopKeren : MainAPI() {
                     URLDecoder.decode(it.value, "UTF-8")
                 }.getOrDefault(it.value)
             }
-            .map { it.cleanEscaped().replace(".txt", ".m3u8") }
+            .map { it.cleanEscaped() }
             .filterNot { isAdUrl(it) || isBadPlayableUrl(it) }
             .forEach { urls.add(it) }
 
@@ -850,7 +860,7 @@ class BioskopKeren : MainAPI() {
             RegexOption.IGNORE_CASE
         ).findAll(clean)
             .mapNotNull { it.groupValues.getOrNull(1) }
-            .map { it.cleanEscaped().replace(".txt", ".m3u8") }
+            .map { it.cleanEscaped() }
             .filter {
                 it.contains(".m3u8", true) ||
                     it.contains(".mp4", true) ||
@@ -861,38 +871,68 @@ class BioskopKeren : MainAPI() {
             .forEach { urls.add(it) }
 
         Regex(
-            """https?://[^"'\\\s<>]+?(?:apidrive\.php|embed|player|stream|filemoon|streamwish|wishfast|dood|streamtape|vidhide|vidguard|voe|mixdrop|mp4upload|lulustream|lulu|hglink|hgcloud|acefile|krakenfiles|gdrive|drive\.google|ok\.ru|odnoklassniki|terabox|mega|abyss|short\.icu)[^"'\\\s<>]*""",
+            """https?://[^"'\\\s<>]+?(?:apidrive\.php|embed|player|stream|filemoon|streamwish|wishfast|dood|streamtape|vidhide|vidguard|voe|mixdrop|mp4upload|lulustream|lulu|hglink|hgcloud|acefile|krakenfiles|gdrive|drive\.google|ok\.ru|odnoklassniki|terabox|mega|abyss|short\.icu|short\.ink)[^"'\\\s<>]*""",
             RegexOption.IGNORE_CASE
         ).findAll(clean)
             .map { it.value.cleanEscaped() }
             .filterNot { isAdUrl(it) || isBadPlayableUrl(it) }
             .forEach { urls.add(it) }
 
+        // New/changed API: apidrive now commonly returns an Abyss payload in a
+        // base64 "const datas" object. The direct media is generated by the
+        // Abyss player, so we must hand off slug URLs to the extractor instead
+        // of sending the wrapper page to ExoPlayer.
         Regex("""const\s+datas\s*=\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
             .findAll(clean)
             .mapNotNull { it.groupValues.getOrNull(1) }
             .forEach { encoded ->
-                val decoded = runCatching { String(android.util.Base64.decode(encoded, android.util.Base64.DEFAULT)) }.getOrNull()
-                val slug = Regex(""""slug"\s*:\s*"([A-Za-z0-9_-]+)""", RegexOption.IGNORE_CASE)
-                    .find(decoded.orEmpty())
-                    ?.groupValues
-                    ?.getOrNull(1)
-                if (!slug.isNullOrBlank()) {
+                val decoded = runCatching {
+                    String(android.util.Base64.decode(encoded, android.util.Base64.DEFAULT))
+                }.getOrNull().orEmpty().cleanEscaped()
+
+                extractAbyssSlugs(decoded).forEach { slug ->
                     urls.add("https://short.icu/$slug")
-                    urls.add("https://abyss.to/?v=$slug")
+                    urls.add("https://short.ink/$slug")
                     urls.add("https://abysscdn.com/?v=$slug")
+                    urls.add("https://abyss.to/?v=$slug")
                 }
             }
 
-        Regex("""[?&]v=([A-Za-z0-9_-]{9,})""", RegexOption.IGNORE_CASE)
-            .findAll(clean)
-            .mapNotNull { it.groupValues.getOrNull(1) }
-            .forEach { slug ->
-                urls.add("https://short.icu/$slug")
-                urls.add("https://abyss.to/?v=$slug")
-            }
+        extractAbyssSlugs(clean).forEach { slug ->
+            urls.add("https://short.icu/$slug")
+            urls.add("https://short.ink/$slug")
+            urls.add("https://abysscdn.com/?v=$slug")
+            urls.add("https://abyss.to/?v=$slug")
+        }
 
         return urls.toList()
+    }
+
+    private fun extractAbyssSlugs(text: String): List<String> {
+        val slugs = linkedSetOf<String>()
+        val clean = text.cleanEscaped()
+
+        Regex(""""slug"\s*:\s*"([A-Za-z0-9_-]{6,})"""", RegexOption.IGNORE_CASE)
+            .findAll(clean)
+            .mapNotNull { it.groupValues.getOrNull(1) }
+            .forEach { slugs.add(it) }
+
+        Regex("""\bv\s*[:=]\s*["']([A-Za-z0-9_-]{6,})["']""", RegexOption.IGNORE_CASE)
+            .findAll(clean)
+            .mapNotNull { it.groupValues.getOrNull(1) }
+            .forEach { slugs.add(it) }
+
+        Regex("""[?&]v=([A-Za-z0-9_-]{6,})""", RegexOption.IGNORE_CASE)
+            .findAll(clean)
+            .mapNotNull { it.groupValues.getOrNull(1) }
+            .forEach { slugs.add(it) }
+
+        Regex("""https?://(?:short\.icu|short\.ink)/([A-Za-z0-9_-]{6,})""", RegexOption.IGNORE_CASE)
+            .findAll(clean)
+            .mapNotNull { it.groupValues.getOrNull(1) }
+            .forEach { slugs.add(it) }
+
+        return slugs.toList()
     }
 
     private fun isKnownHost(url: String): Boolean {
@@ -903,6 +943,7 @@ class BioskopKeren : MainAPI() {
             "apidrive.php",
             "abyss.to",
             "short.icu",
+            "short.ink",
             "abysscdn",
             "embed",
             "player",
@@ -936,6 +977,7 @@ class BioskopKeren : MainAPI() {
         return listOf(
             "abyss.to",
             "short.icu",
+            "short.ink",
             "abysscdn",
             "filemoon",
             "streamwish",
@@ -962,6 +1004,7 @@ class BioskopKeren : MainAPI() {
         return url.contains(".m3u8", true) ||
             url.contains(".mp4", true) ||
             url.contains("apidrive.php", true) ||
+            url.contains("short.ink", true) ||
             isKnownHost(url)
     }
 
@@ -984,15 +1027,19 @@ class BioskopKeren : MainAPI() {
         return playerHosts.any { host == it || host.endsWith(".$it") } ||
             lower.contains("/apidrive.php") ||
             lower.contains("embed") ||
-            lower.contains("player")
+            lower.contains("player") ||
+            lower.contains("short.icu/") ||
+            lower.contains("short.ink/")
     }
 
     private fun isDirectMedia(url: String): Boolean {
         val lower = url.lowercase()
-        return lower.contains(".m3u8") ||
-            lower.contains(".mp4") ||
+        val path = runCatching { URI(url).path.orEmpty().lowercase() }.getOrDefault(lower.substringBefore("?"))
+        return path.endsWith(".m3u8") ||
+            path.endsWith(".mp4") ||
+            path.endsWith(".webm") ||
+            path.endsWith(".mkv") ||
             lower.contains("googlevideo.com/videoplayback") ||
-            lower.contains("blogger.googleusercontent.com") ||
             lower.contains("video-downloads.googleusercontent.com")
     }
 
@@ -1221,8 +1268,12 @@ class BioskopKeren : MainAPI() {
     private fun String.cleanEscaped(): String {
         return this
             .replace("\\/", "/")
+            .replace("\\u002F", "/")
+            .replace("\\u003A", ":")
             .replace("\\u0026", "&")
+            .replace("\\u003D", "=")
             .replace("&amp;", "&")
+            .replace("&#038;", "&")
             .trim()
     }
 
