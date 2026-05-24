@@ -43,10 +43,7 @@ class FreePornVideos : MainAPI() {
         "networks/adult-time/%d/" to "Adult Time",
         "networks/rk-com/%d/" to "Reality Kings",
         "networks/mom-lover/%d/" to "Mom Lover",
-        "networks/nubiles-porn/%d/" to "Nubiles",
         "networks/teamskeet/%d/" to "TeamSkeet",
-        "networks/fakehub-originals/%d/" to "FakeHub",
-        "networks/private-com/%d/" to "Private",
 
         "categories/jav-uncensored/%d/" to "JAV Uncensored",
         "categories/milf/%d/" to "MILF",
