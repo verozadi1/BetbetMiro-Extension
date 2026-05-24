@@ -161,6 +161,9 @@ class Dramabox : MainAPI() {
         val poster = detail?.coverImage?.takeIf { it.isNotBlank() }
             ?: openData?.coverImage?.takeIf { it.isNotBlank() }
 
+        val officialDramaUrl = openData?.webUrl?.takeIf { it.isNotBlank() }
+            ?: buildDramaWebUrl(title, dramaId)
+
         val episodeCount = detail?.episodeCount?.takeIf { it > 0 }
             ?: inferEpisodeCount(dramaId)
                 .takeIf { it > 0 }
@@ -176,7 +179,7 @@ class Dramabox : MainAPI() {
                         bookId = dramaId,
                         episodeNo = ep,
                         title = title,
-                        webUrl = null,
+                        webUrl = officialDramaUrl,
                         chapterId = null
                     ).toJson()
                 ) {
@@ -187,7 +190,7 @@ class Dramabox : MainAPI() {
             }
         }
 
-        return newTvSeriesLoadResponse(title, buildDramaWebUrl(title, dramaId), TvType.AsianDrama, episodes) {
+        return newTvSeriesLoadResponse(title, officialDramaUrl, TvType.AsianDrama, episodes) {
             this.posterUrl = poster
             this.plot = detail?.introduction
             this.tags = detail?.tags
@@ -206,11 +209,25 @@ class Dramabox : MainAPI() {
         val chapterId = parsed.chapterId?.trim()?.takeIf { it.isNotBlank() }
         val officialVideoUrl = parsed.webUrl?.trim()?.takeIf { it.isNotBlank() }
 
-        val chapter = fetchChapterForEpisode(dramaId, episodeNo, chapterId)
-        val apiStreams = chapter?.streamUrl.orEmpty()
+        val embeddedStreams = parsed.streams.orEmpty()
             .mapNotNull { it.normalizedOrNull() }
             .distinctBy { it.url }
             .sortedByDescending { it.quality ?: 0 }
+
+        val chapter = if (embeddedStreams.isEmpty()) {
+            fetchChapterForEpisode(dramaId, episodeNo, chapterId)
+        } else {
+            null
+        }
+
+        val apiStreams = if (embeddedStreams.isNotEmpty()) {
+            embeddedStreams
+        } else {
+            chapter?.streamUrl.orEmpty()
+                .mapNotNull { it.normalizedOrNull() }
+                .distinctBy { it.url }
+                .sortedByDescending { it.quality ?: 0 }
+        }
 
         val webStreams = if (apiStreams.isEmpty() && !officialVideoUrl.isNullOrBlank()) {
             fetchOfficialVideoStreams(officialVideoUrl)
@@ -274,11 +291,22 @@ class Dramabox : MainAPI() {
     private fun DramaItem.toSearchResult(): SearchResponse? {
         val dramaId = id?.trim()?.takeIf { it.isNotBlank() } ?: return null
         val cleanName = cleanTitle(title ?: "DramaBox").ifBlank { "DramaBox" }
+        val poster = coverImage?.takeIf { it.isNotBlank() }
+        val webUrl = buildDramaWebUrl(cleanName, dramaId)
 
-        // Pakai URL web yang valid untuk mencegah 404:
-        // https://www.dramabox.com/in/drama/41000110445/forever-was-a-lie
-        return newTvSeriesSearchResponse(cleanName, buildDramaWebUrl(cleanName, dramaId), TvType.AsianDrama) {
-            this.posterUrl = coverImage
+        // Simpan judul/poster di URL-data supaya halaman detail tetap punya judul
+        // walaupun endpoint detail API sedang kosong/gagal.
+        return newTvSeriesSearchResponse(
+            cleanName,
+            DramaOpenData(
+                id = dramaId,
+                title = cleanName,
+                coverImage = poster,
+                webUrl = webUrl
+            ).toJson(),
+            TvType.AsianDrama
+        ) {
+            this.posterUrl = poster
         }
     }
 
@@ -334,7 +362,16 @@ class Dramabox : MainAPI() {
 
         val poster = findPosterFromElement(this, href)
 
-        return newTvSeriesSearchResponse(cleanName, buildDramaWebUrl(cleanName, dramaId), TvType.AsianDrama) {
+        return newTvSeriesSearchResponse(
+            cleanName,
+            DramaOpenData(
+                id = dramaId,
+                title = cleanName,
+                coverImage = poster,
+                webUrl = buildDramaWebUrl(cleanName, dramaId)
+            ).toJson(),
+            TvType.AsianDrama
+        ) {
             this.posterUrl = poster
         }
     }
@@ -671,13 +708,18 @@ class Dramabox : MainAPI() {
                 null
             }
 
+            val cleanStreams = chapter.streamUrl.orEmpty()
+                .mapNotNull { it.normalizedOrNull() }
+                .distinctBy { it.url }
+
             newEpisode(
                 LoadData(
                     bookId = dramaId,
                     episodeNo = ep,
                     chapterId = chapterId,
                     webUrl = webUrl,
-                    title = title
+                    title = title,
+                    streams = cleanStreams
                 ).toJson()
             ) {
                 this.name = "Episode $ep"
@@ -714,10 +756,7 @@ class Dramabox : MainAPI() {
 
     private fun StreamItem.normalizedOrNull(): StreamItem? {
         val fixedUrl = url
-            ?.replace("\\u002F", "/")
-            ?.replace("\\/", "/")
-            ?.replace("&amp;", "&")
-            ?.trim()
+            ?.cleanStreamText()
             ?.takeIf { it.isNotBlank() }
             ?: return null
 
@@ -743,10 +782,7 @@ class Dramabox : MainAPI() {
     }
 
     private fun parseStreamItemsFromHtml(html: String): List<StreamItem> {
-        val decodedHtml = html
-            .replace("\\u002F", "/")
-            .replace("\\/", "/")
-            .replace("&amp;", "&")
+        val decodedHtml = html.cleanStreamText()
 
         val result = mutableListOf<StreamItem>()
 
@@ -758,13 +794,32 @@ class Dramabox : MainAPI() {
         directPatterns.forEach { pattern ->
             pattern.findAll(decodedHtml).forEach { match ->
                 val raw = match.groupValues.getOrNull(1)?.takeIf { it.isNotBlank() } ?: match.value
-                if (raw.startsWith("http", true)) {
-                    result.add(StreamItem(raw.detectQuality(), raw))
+                val cleaned = raw.cleanStreamText()
+                if (cleaned.startsWith("http", true)) {
+                    result.add(StreamItem(cleaned.detectQuality(), cleaned))
                 }
             }
         }
 
         return result.distinctBy { it.url }
+    }
+
+
+    private fun String.cleanStreamText(): String {
+        val normalized = replace("\\u002F", "/")
+            .replace("\\/", "/")
+            .replace("\u002F", "/")
+            .replace("\u003A", ":")
+            .replace("\u0026", "&")
+            .replace("&amp;", "&")
+            .trim()
+
+        return if (normalized.contains("%3A%2F%2F", true) || normalized.contains("%2F", true)) {
+            runCatching { java.net.URLDecoder.decode(normalized, "UTF-8") }
+                .getOrDefault(normalized)
+        } else {
+            normalized
+        }
     }
 
     private fun String.detectQuality(): Int? {
@@ -1027,11 +1082,7 @@ class Dramabox : MainAPI() {
                         val keyQuality = key.filter { it.isDigit() }.toIntOrNull()
 
                         if (child is String) {
-                            val cleanedChild = child
-                                .replace("\\u002F", "/")
-                                .replace("\\/", "/")
-                                .replace("&amp;", "&")
-                                .trim()
+                            val cleanedChild = child.cleanStreamText()
                             if (cleanedChild.startsWith("http", true)) {
                                 result.add(StreamItem(keyQuality ?: cleanedChild.detectQuality(), cleanedChild))
                             }
@@ -1044,11 +1095,7 @@ class Dramabox : MainAPI() {
                     for (i in 0 until value.length()) parseOne(value.opt(i))
                 }
                 is String -> {
-                    val cleaned = value
-                        .replace("\\u002F", "/")
-                        .replace("\\/", "/")
-                        .replace("&amp;", "&")
-                        .trim()
+                    val cleaned = value.cleanStreamText()
 
                     if (cleaned.startsWith("http", true)) {
                         result.add(StreamItem(cleaned.detectQuality(), cleaned))
@@ -1056,7 +1103,8 @@ class Dramabox : MainAPI() {
                         Regex("""https?://[^"'\<>\s]+""", RegexOption.IGNORE_CASE)
                             .findAll(cleaned)
                             .forEach { match ->
-                                result.add(StreamItem(match.value.detectQuality(), match.value))
+                                val url = match.value.cleanStreamText()
+                                result.add(StreamItem(url.detectQuality(), url))
                             }
                     }
                 }
@@ -1075,7 +1123,7 @@ class Dramabox : MainAPI() {
     )
 
     companion object {
-        private const val FALLBACK_EPISODE_COUNT = 120
+        private const val FALLBACK_EPISODE_COUNT = 1
     }
 
     data class DramaListResponse(@JsonProperty("data") val data: List<DramaItem>? = null, @JsonProperty("meta") val meta: ResponseMeta? = null)
@@ -1095,12 +1143,18 @@ class Dramabox : MainAPI() {
         @JsonProperty("chapterNo") val chapterNoCamel: String? = null
     )
     data class StreamItem(@JsonProperty("quality") val quality: Int? = null, @JsonProperty("url") val url: String? = null)
-    data class DramaOpenData(@JsonProperty("id") val id: String? = null, @JsonProperty("title") val title: String? = null, @JsonProperty("coverImage") val coverImage: String? = null)
+    data class DramaOpenData(
+        @JsonProperty("id") val id: String? = null,
+        @JsonProperty("title") val title: String? = null,
+        @JsonProperty("coverImage") val coverImage: String? = null,
+        @JsonProperty("webUrl") val webUrl: String? = null
+    )
     data class LoadData(
         @JsonProperty("bookId") val bookId: String? = null,
         @JsonProperty("episodeNo") val episodeNo: Int? = null,
         @JsonProperty("chapterId") val chapterId: String? = null,
         @JsonProperty("webUrl") val webUrl: String? = null,
-        @JsonProperty("title") val title: String? = null
+        @JsonProperty("title") val title: String? = null,
+        @JsonProperty("streams") val streams: List<StreamItem>? = null
     )
 }
