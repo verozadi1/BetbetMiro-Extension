@@ -6,6 +6,7 @@ import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
 import java.net.URLEncoder
+import java.util.Locale
 
 class DailymotionProvider : MainAPI() {
 
@@ -14,7 +15,15 @@ class DailymotionProvider : MainAPI() {
     override val hasMainPage = true
     override val hasQuickSearch = true
     override var lang = "id"
-    override val supportedTypes = setOf(TvType.Others)
+    override val supportedTypes = setOf(
+        TvType.Movie,
+        TvType.TvSeries,
+        TvType.AsianDrama,
+        TvType.Anime,
+        TvType.AnimeMovie,
+        TvType.Cartoon,
+        TvType.Others
+    )
 
     private val apiBase = "https://api.dailymotion.com"
     private val videoFields = listOf(
@@ -25,37 +34,70 @@ class DailymotionProvider : MainAPI() {
         "thumbnail_720_url",
         "duration",
         "channel",
-        "created_time"
+        "created_time",
+        "url",
+        "embed_url",
+        "language",
+        "country",
+        "mode",
+        "views_total"
     ).joinToString(",")
 
     override val mainPage = mainPageOf(
-        "sort=recent" to "Terbaru",
-        "sort=visited" to "Paling Banyak Ditonton",
+        row("sort=trending", "Trending Hari Ini", TvType.Others),
+        row("sort=recent", "Upload Terbaru", TvType.Others),
+        row("sort=visited-week", "Populer Minggu Ini", TvType.Others),
+        row("channel=tv&sort=recent", "TV Publik Terbaru", TvType.Others),
 
-        "channel=news&sort=recent" to "Berita",
-        "channel=sport&sort=recent" to "Olahraga",
-        "channel=music&sort=recent" to "Musik",
-        "channel=fun&sort=recent" to "Hiburan & Lucu",
-        "channel=tv&sort=recent" to "TV",
-        "channel=shortfilms&sort=recent" to "Film Pendek",
-        "channel=videogames&sort=recent" to "Gaming",
-        "channel=tech&sort=recent" to "Teknologi",
-        "channel=travel&sort=recent" to "Travel",
-        "channel=animals&sort=recent" to "Hewan",
-        "channel=auto&sort=recent" to "Otomotif",
-        "channel=creation&sort=recent" to "Kreasi",
-        "channel=lifestyle&sort=recent" to "Lifestyle",
-        "channel=people&sort=recent" to "People",
-        "channel=school&sort=recent" to "Edukasi",
-        "channel=kids&sort=recent" to "Kids",
-        "channel=webcam&sort=recent" to "Webcam"
+        row(searchQuery("anime sub indo", "relevance", longerThan = 8), "Anime Sub Indo", TvType.Anime),
+        row(searchQuery("anime episode subtitle indonesia", "relevance", longerThan = 8), "Anime Episode Indonesia", TvType.Anime),
+        row(searchQuery("anime movie full movie", "relevance", longerThan = 20), "Anime Movie", TvType.AnimeMovie),
+        row(searchQuery("donghua sub indo", "relevance", longerThan = 8), "Donghua Sub Indo", TvType.Anime),
+        row(searchQuery("cartoon full episode", "relevance", longerThan = 8), "Cartoon Full Episode", TvType.Cartoon),
+
+        row(searchQuery("drama korea sub indo", "relevance", longerThan = 20), "Drama Korea", TvType.AsianDrama),
+        row(searchQuery("drama china sub indo", "relevance", longerThan = 20), "Drama China", TvType.AsianDrama),
+        row(searchQuery("drama thailand sub indo", "relevance", longerThan = 20), "Drama Thailand", TvType.AsianDrama),
+        row(searchQuery("drama jepang sub indo", "relevance", longerThan = 20), "Drama Jepang", TvType.AsianDrama),
+        row(searchQuery("drama filipina full episode", "relevance", longerThan = 20), "Drama Filipina", TvType.AsianDrama),
+        row(searchQuery("drama malaysia full episode", "relevance", longerThan = 20), "Drama Malaysia", TvType.AsianDrama),
+        row(searchQuery("sinetron indonesia full episode", "relevance", longerThan = 20), "Drama Indonesia", TvType.TvSeries),
+
+        row(searchQuery("full movie indonesia", "relevance", longerThan = 45), "Movie Indonesia", TvType.Movie),
+        row(searchQuery("full movie korea", "relevance", longerThan = 45), "Movie Korea", TvType.Movie),
+        row(searchQuery("full movie china", "relevance", longerThan = 45), "Movie China", TvType.Movie),
+        row(searchQuery("full movie japan", "relevance", longerThan = 45), "Movie Jepang", TvType.Movie),
+        row(searchQuery("full movie thailand", "relevance", longerThan = 45), "Movie Thailand", TvType.Movie),
+        row(searchQuery("full movie india hindi", "relevance", longerThan = 45), "Movie India", TvType.Movie),
+        row(searchQuery("full movie philippines", "relevance", longerThan = 45), "Movie Filipina", TvType.Movie),
+        row(searchQuery("full movie malaysia", "relevance", longerThan = 45), "Movie Malaysia", TvType.Movie),
+        row(searchQuery("full movie english", "relevance", longerThan = 45), "Movie Barat", TvType.Movie),
+
+        row(searchQuery("WWE full show", "relevance", longerThan = 20), "WWE Full Show", TvType.Others),
+        row(searchQuery("WWE Raw full show", "relevance", longerThan = 20), "WWE RAW", TvType.Others),
+        row(searchQuery("WWE SmackDown full show", "relevance", longerThan = 20), "WWE SmackDown", TvType.Others),
+        row(searchQuery("WWE NXT full show", "relevance", longerThan = 20), "WWE NXT", TvType.Others),
+        row(searchQuery("WWE highlights", "relevance", longerThan = 3), "WWE Highlights", TvType.Others),
+        row(searchQuery("AEW Dynamite full show", "relevance", longerThan = 20), "AEW Dynamite", TvType.Others),
+        row(searchQuery("UFC full fight", "relevance", longerThan = 5), "UFC Full Fight", TvType.Others),
+
+        row(searchQuery("documentary indonesia", "relevance", longerThan = 15), "Dokumenter Indonesia", TvType.Others),
+        row(searchQuery("komedi indonesia", "relevance", longerThan = 8), "Komedi Indonesia", TvType.Others),
+        row(searchQuery("travel indonesia", "relevance", longerThan = 5), "Travel Indonesia", TvType.Others),
+        row("channel=news&sort=recent", "Berita", TvType.Others),
+        row("channel=sport&sort=recent", "Olahraga", TvType.Others),
+        row("channel=music&sort=recent", "Musik", TvType.Others),
+        row("channel=fun&sort=recent", "Hiburan & Lucu", TvType.Others),
+        row("channel=videogames&sort=recent", "Gaming", TvType.Others),
+        row("channel=tech&sort=recent", "Teknologi", TvType.Others)
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        val category = parseCategoryData(request.data)
         val apiUrl = buildVideoListUrl(
-            query = request.data,
+            query = category.apiQuery,
             page = page,
-            limit = 24
+            limit = 36
         )
 
         val videos = app.get(apiUrl, headers = apiHeaders)
@@ -64,26 +106,26 @@ class DailymotionProvider : MainAPI() {
 
         val home = videos?.list
             .orEmpty()
-            .mapNotNull { it.toSearchResponse() }
+            .mapNotNull { it.toSearchResponse(category.type) }
             .distinctBy { it.url }
 
         return newHomePageResponse(
             request.name,
             home,
-            hasNext = videos?.hasMore == true || home.isNotEmpty()
+            hasNext = videos?.hasMore == true
         )
     }
 
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun search(query: String): List<SearchResponse> {
-        if (query.isBlank()) return emptyList()
+        val cleanQuery = query.trim()
+        if (cleanQuery.isBlank()) return emptyList()
 
-        val encodedQuery = query.urlEncoded()
         val apiUrl = buildVideoListUrl(
-            query = "search=$encodedQuery&sort=relevance",
+            query = searchQuery(cleanQuery, sort = "relevance"),
             page = 1,
-            limit = 30
+            limit = 40
         )
 
         return app.get(apiUrl, headers = apiHeaders)
@@ -91,7 +133,7 @@ class DailymotionProvider : MainAPI() {
             .let { tryParseJson<VideoSearchResponse>(it) }
             ?.list
             .orEmpty()
-            .mapNotNull { it.toSearchResponse() }
+            .mapNotNull { it.toSearchResponse(inferTypeFromTitle(it.title.orEmpty())) }
             .distinctBy { it.url }
     }
 
@@ -99,13 +141,14 @@ class DailymotionProvider : MainAPI() {
         val videoId = url.extractDailymotionId()
             ?: throw ErrorLoadingException("ID video Dailymotion tidak ditemukan")
 
-        val apiUrl = "$apiBase/video/$videoId?fields=id,title,description,thumbnail_720_url,thumbnail_360_url,duration,channel,created_time"
+        val forcedType = extractForcedType(url)
+        val apiUrl = "$apiBase/video/$videoId?fields=$videoFields"
         val detail = app.get(apiUrl, headers = apiHeaders)
             .text
             .let { tryParseJson<VideoDetailResponse>(it) }
             ?: throw ErrorLoadingException("Detail video Dailymotion tidak ditemukan")
 
-        return detail.toLoadResponse()
+        return detail.toLoadResponse(forcedType)
     }
 
     override suspend fun loadLinks(
@@ -116,52 +159,176 @@ class DailymotionProvider : MainAPI() {
     ): Boolean {
         if (data.isBlank()) return false
 
-        return try {
-            loadExtractor(data, "$mainUrl/", subtitleCallback, callback)
-        } catch (_: Throwable) {
-            false
+        val urls = data.split(LINK_SEPARATOR)
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+
+        var found = false
+        for (url in urls) {
+            found = runCatching {
+                loadExtractor(url, "$mainUrl/", subtitleCallback, callback)
+            }.getOrDefault(false) || found
         }
+
+        return found
+    }
+
+    private fun row(query: String, title: String, type: TvType): Pair<String, String> {
+        return "dmtype=${type.name}&$query" to title
+    }
+
+    private fun parseCategoryData(data: String): CategoryData {
+        val params = data.split("&")
+            .mapNotNull { item ->
+                val key = item.substringBefore("=", "").trim()
+                val value = item.substringAfter("=", "").trim()
+                if (key.isBlank()) null else key to value
+            }
+            .toMap()
+
+        val type = params["dmtype"]?.toTvType() ?: TvType.Others
+        val apiQuery = data.split("&")
+            .filterNot { it.startsWith("dmtype=", ignoreCase = true) }
+            .joinToString("&")
+            .trim('&')
+
+        return CategoryData(
+            apiQuery = apiQuery.ifBlank { "sort=recent" },
+            type = type
+        )
+    }
+
+    private fun searchQuery(
+        query: String,
+        sort: String = "relevance",
+        longerThan: Int? = null
+    ): String {
+        val parts = mutableListOf(
+            "search=${query.urlEncoded()}",
+            "sort=$sort",
+            "availability=true",
+            "no_live=true"
+        )
+
+        if (longerThan != null && longerThan > 0) {
+            parts += "longer_than=$longerThan"
+        }
+
+        return parts.joinToString("&")
     }
 
     private fun buildVideoListUrl(query: String, page: Int, limit: Int): String {
         val safeQuery = query.trim().trimStart('&')
-        return "$apiBase/videos?fields=$videoFields&limit=$limit&page=$page&$safeQuery"
+        val joiner = if (safeQuery.isBlank()) "" else "&$safeQuery"
+        return "$apiBase/videos?fields=$videoFields&limit=$limit&page=$page$joiner"
     }
 
-    private fun VideoItem.toSearchResponse(): SearchResponse? {
+    private fun VideoItem.toSearchResponse(type: TvType): SearchResponse? {
         val videoId = id?.takeIf { it.isNotBlank() } ?: return null
         val cleanTitle = title?.trim()?.takeIf { it.isNotBlank() } ?: "Dailymotion Video"
-        val watchUrl = "$mainUrl/video/$videoId"
+        val resolvedType = if (type == TvType.Others) inferTypeFromTitle(cleanTitle) else type
+        val watchUrl = "$mainUrl/video/$videoId?dmtype=${resolvedType.name}"
+        val poster = thumbnail720Url ?: thumbnail360Url
+        val year = extractYear(cleanTitle)
 
-        return newMovieSearchResponse(cleanTitle, watchUrl, TvType.Others) {
-            posterUrl = thumbnail360Url ?: thumbnail720Url
+        return when (resolvedType) {
+            TvType.TvSeries, TvType.AsianDrama -> newTvSeriesSearchResponse(cleanTitle, watchUrl, resolvedType) {
+                posterUrl = poster
+                this.year = year
+            }
+            TvType.Anime -> newAnimeSearchResponse(cleanTitle, watchUrl, TvType.Anime) {
+                posterUrl = poster
+                this.year = year
+            }
+            TvType.AnimeMovie -> newAnimeSearchResponse(cleanTitle, watchUrl, TvType.AnimeMovie) {
+                posterUrl = poster
+                this.year = year
+            }
+            else -> newMovieSearchResponse(cleanTitle, watchUrl, resolvedType) {
+                posterUrl = poster
+                this.year = year
+            }
         }
     }
 
-    private suspend fun VideoDetailResponse.toLoadResponse(): LoadResponse {
+    private suspend fun VideoDetailResponse.toLoadResponse(forcedType: TvType?): LoadResponse {
         val videoId = id?.takeIf { it.isNotBlank() }
             ?: throw ErrorLoadingException("ID video Dailymotion kosong")
-        val watchUrl = "$mainUrl/video/$videoId"
         val cleanTitle = title?.trim()?.takeIf { it.isNotBlank() } ?: "Dailymotion Video"
+        val resolvedType = forcedType ?: inferTypeFromTitle(cleanTitle)
+        val watchUrl = url?.takeIf { it.isNotBlank() } ?: "$mainUrl/video/$videoId"
+        val embedUrl = embedUrl?.takeIf { it.isNotBlank() }
+        val data = listOfNotNull(watchUrl, embedUrl).distinct().joinToString(LINK_SEPARATOR)
+        val tagList = listOfNotNull(
+            channel?.trim()?.takeIf { it.isNotBlank() },
+            country?.trim()?.takeIf { it.isNotBlank() },
+            language?.trim()?.takeIf { it.isNotBlank() },
+            mode?.trim()?.takeIf { it.isNotBlank() }
+        )
 
-        return newMovieLoadResponse(cleanTitle, watchUrl, TvType.Others, watchUrl) {
+        return newMovieLoadResponse(cleanTitle, watchUrl, resolvedType, data) {
             posterUrl = thumbnail720Url ?: thumbnail360Url
             plot = description?.trim()?.takeIf { it.isNotBlank() }
             duration = duration?.let { seconds -> seconds / 60 }
-            tags = listOfNotNull(channel?.trim()?.takeIf { it.isNotBlank() })
+            tags = tagList
         }
     }
 
-    private fun String.extractDailymotionId(): String? {
-        return Regex("""(?:dailymotion\.com/video/|dai\.ly/)([A-Za-z0-9]+)""")
-            .find(this)
+    private fun extractForcedType(url: String): TvType? {
+        return url.substringAfter("dmtype=", "")
+            .substringBefore("&")
+            .takeIf { it.isNotBlank() }
+            ?.toTvType()
+    }
+
+    private fun String.toTvType(): TvType? {
+        return when (trim().lowercase(Locale.ROOT)) {
+            "movie" -> TvType.Movie
+            "tvseries" -> TvType.TvSeries
+            "asiandrama" -> TvType.AsianDrama
+            "anime" -> TvType.Anime
+            "animemovie" -> TvType.AnimeMovie
+            "cartoon" -> TvType.Cartoon
+            "others" -> TvType.Others
+            else -> null
+        }
+    }
+
+    private fun inferTypeFromTitle(title: String): TvType {
+        val lower = title.lowercase(Locale.ROOT)
+        return when {
+            lower.contains("anime") || lower.contains("sub indo") && lower.contains("episode") -> TvType.Anime
+            lower.contains("donghua") -> TvType.Anime
+            lower.contains("cartoon") || lower.contains("animation") -> TvType.Cartoon
+            lower.contains("drama korea") || lower.contains("drakor") -> TvType.AsianDrama
+            lower.contains("drama china") || lower.contains("cdrama") -> TvType.AsianDrama
+            lower.contains("drama thailand") || lower.contains("thai drama") -> TvType.AsianDrama
+            lower.contains("full movie") || lower.contains("film ") || lower.contains("movie") -> TvType.Movie
+            lower.contains("raw") || lower.contains("smackdown") || lower.contains("wwe") || lower.contains("aew") -> TvType.Others
+            else -> TvType.Others
+        }
+    }
+
+    private fun extractYear(text: String?): Int? {
+        return Regex("""\b(19\d{2}|20\d{2})\b""")
+            .find(text.orEmpty())
             ?.groupValues
             ?.getOrNull(1)
-            ?: substringAfter("/video/", "")
+            ?.toIntOrNull()
+    }
+
+    private fun String.extractDailymotionId(): String? {
+        val clean = substringBefore("?").trim()
+        return Regex("""(?:dailymotion\.com/(?:embed/)?video/|dai\.ly/)([A-Za-z0-9]+)""")
+            .find(clean)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?: clean.substringAfter("/video/", "")
                 .substringBefore("?")
                 .substringBefore("_")
                 .takeIf { it.isNotBlank() && !it.contains("/") }
-            ?: takeIf { it.matches(Regex("""[A-Za-z0-9]+""")) }
+            ?: clean.takeIf { it.matches(Regex("""[A-Za-z0-9]+""")) }
     }
 
     private fun String.urlEncoded(): String = try {
@@ -174,6 +341,11 @@ class DailymotionProvider : MainAPI() {
         "Accept" to "application/json,text/plain,*/*",
         "User-Agent" to USER_AGENT,
         "Referer" to "$mainUrl/"
+    )
+
+    private data class CategoryData(
+        val apiQuery: String,
+        val type: TvType
     )
 
     data class VideoSearchResponse(
@@ -192,7 +364,13 @@ class DailymotionProvider : MainAPI() {
         @param:JsonProperty("thumbnail_720_url") val thumbnail720Url: String? = null,
         @param:JsonProperty("duration") val duration: Int? = null,
         @param:JsonProperty("channel") val channel: String? = null,
-        @param:JsonProperty("created_time") val createdTime: Long? = null
+        @param:JsonProperty("created_time") val createdTime: Long? = null,
+        @param:JsonProperty("url") val url: String? = null,
+        @param:JsonProperty("embed_url") val embedUrl: String? = null,
+        @param:JsonProperty("language") val language: String? = null,
+        @param:JsonProperty("country") val country: String? = null,
+        @param:JsonProperty("mode") val mode: String? = null,
+        @param:JsonProperty("views_total") val viewsTotal: Long? = null
     )
 
     data class VideoDetailResponse(
@@ -203,6 +381,16 @@ class DailymotionProvider : MainAPI() {
         @param:JsonProperty("thumbnail_720_url") val thumbnail720Url: String? = null,
         @param:JsonProperty("duration") val duration: Int? = null,
         @param:JsonProperty("channel") val channel: String? = null,
-        @param:JsonProperty("created_time") val createdTime: Long? = null
+        @param:JsonProperty("created_time") val createdTime: Long? = null,
+        @param:JsonProperty("url") val url: String? = null,
+        @param:JsonProperty("embed_url") val embedUrl: String? = null,
+        @param:JsonProperty("language") val language: String? = null,
+        @param:JsonProperty("country") val country: String? = null,
+        @param:JsonProperty("mode") val mode: String? = null,
+        @param:JsonProperty("views_total") val viewsTotal: Long? = null
     )
+
+    companion object {
+        private const val LINK_SEPARATOR = "|||DM|||"
+    }
 }
