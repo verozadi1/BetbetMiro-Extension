@@ -53,17 +53,12 @@ class HentaiWorld : MainAPI() {
 
         "hentai-videos/tag/ahegao/" to "Ahegao",
         "hentai-videos/tag/bdsm/" to "BDSM",
-        "hentai-videos/tag/blowjob/" to "Blowjob",
         "hentai-videos/tag/bondage/" to "Bondage",
         "hentai-videos/tag/creampie/" to "Creampie",
-        "hentai-videos/tag/demon/" to "Demon",
-        "hentai-videos/tag/ecchi/" to "Ecchi",
-        "hentai-videos/tag/femdom/" to "Femdom",
         "hentai-videos/tag/harem/" to "Harem",
         "hentai-videos/tag/hd/" to "HD",
         "hentai-videos/tag/maid/" to "Maid",
         "hentai-videos/tag/monster/" to "Monster",
-        "hentai-videos/tag/romance/" to "Romance",
         "hentai-videos/tag/teacher/" to "Teacher",
         "hentai-videos/tag/tentacle/" to "Tentacle"
     )
