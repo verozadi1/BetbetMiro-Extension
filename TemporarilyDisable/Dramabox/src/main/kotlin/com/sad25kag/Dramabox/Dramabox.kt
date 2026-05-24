@@ -13,7 +13,6 @@ import org.jsoup.nodes.Element
 
 class Dramabox : MainAPI() {
     override var mainUrl = "https://www.dramabox.com/in"
-    private val apiUrl = "https://db.hafizhibnusyam.my.id"
     override var name = "DramaBox"
     override var lang = "id"
     override val hasMainPage = true
