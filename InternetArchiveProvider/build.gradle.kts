@@ -1,10 +1,8 @@
 // Use an integer for version numbers
-version = 1
+version = 2
 
 cloudstream {
-    // All of these properties are optional, you can safely remove any of them.
-
-    description = "Watch content from the Internet Archive at archive.org"
+    description = "Watch movies, classic TV, animation, and public-domain video from the Internet Archive"
     authors = listOf("BetbetMiro")
 
     /**
@@ -14,9 +12,9 @@ cloudstream {
      * 2: Slow
      * 3: Beta-only
      */
-    status = 1 // Will be 3 if unspecified
+    status = 1
 
-    tvTypes = listOf("Others")
+    tvTypes = listOf("Movie", "TvSeries", "Anime", "Others")
     iconUrl = "https://www.google.com/s2/favicons?domain=archive.org&sz=%size%"
 
     isCrossPlatform = true

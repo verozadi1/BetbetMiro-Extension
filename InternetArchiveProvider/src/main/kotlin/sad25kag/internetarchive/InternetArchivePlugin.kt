@@ -1,12 +1,11 @@
-package recloudstream
+package sad25kag.internetarchive
 
 import com.lagradost.cloudstream3.plugins.BasePlugin
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 
 @CloudstreamPlugin
-class InternetArchivePlugin: BasePlugin() {
+class InternetArchivePlugin : BasePlugin() {
     override fun load() {
-        // All providers should be added in this manner. Please don't edit the providers list directly.
         registerMainAPI(InternetArchiveProvider())
     }
 }
