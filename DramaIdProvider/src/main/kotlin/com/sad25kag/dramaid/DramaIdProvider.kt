@@ -37,7 +37,7 @@ import java.util.Base64
 
 class DramaIdProvider : MainAPI() {
     override var mainUrl = "https://drama-id.com"
-    override var name = "DramaID."
+    override var name = "DramaID"
     override var lang = "id"
     override val hasMainPage = true
     override val hasQuickSearch = true
@@ -186,53 +186,159 @@ class DramaIdProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val fixedUrl = fixUrl(data)
-        val document = app.get(fixedUrl, referer = "$mainUrl/").document
-        val emitted = linkedSetOf<String>()
-        var handled = false
+        val page = app.get(fixedUrl, referer = "$mainUrl/").text
+        val document = Jsoup.parse(page, fixedUrl)
 
-        document.select(".streaming_load[data]").forEach { element ->
-            val decodedHtml = decodeBase64(element.attr("data")) ?: return@forEach
-            Jsoup.parse(decodedHtml).select("iframe[src], iframe[data-src]").forEach { iframe ->
-                val iframeUrl = normalizeUrl(iframe.attr("src").ifBlank { iframe.attr("data-src") }, fixedUrl) ?: return@forEach
-                handled = true
-                runCatching { loadExtractor(iframeUrl, fixedUrl, subtitleCallback, callback) }
-                decodeBerkasDriveId(iframeUrl)?.let { resolver ->
-                    runCatching { loadExtractor(resolver, fixedUrl, subtitleCallback, callback) }
+        val emitted = linkedSetOf<String>()
+        val queue = ArrayDeque<Pair<String, String>>()
+        val visited = linkedSetOf<String>()
+        var delivered = 0
+
+        val trackedCallback: (ExtractorLink) -> Unit = { link ->
+            val linkUrl = link.url
+            if (linkUrl.isNotBlank() && !isBlockedMediaOrAd(linkUrl) && emitted.add(linkUrl)) {
+                delivered++
+                callback(link)
+            }
+        }
+
+        fun addCandidate(raw: String?, refererUrl: String = fixedUrl) {
+            val normalized = normalizeUrl(raw.orEmpty(), refererUrl) ?: return
+            if (normalized.isBlank() || isBlockedMediaOrAd(normalized)) return
+
+            if (isMediaUrl(normalized)) {
+                queue.add(normalized to refererUrl)
+                return
+            }
+
+            if (isKnownResolverUrl(normalized)) {
+                queue.add(normalized to refererUrl)
+            }
+        }
+
+        fun decodeAndCollect(value: String?, refererUrl: String = fixedUrl) {
+            val raw = value.orEmpty().trim()
+            if (raw.isBlank()) return
+
+            addCandidate(raw, refererUrl)
+
+            decodeBase64(raw)?.let { decoded ->
+                collectCandidatesFromText(decoded, refererUrl).forEach { addCandidate(it, refererUrl) }
+                Jsoup.parse(decoded, refererUrl)
+                    .select("iframe[src], iframe[data-src], source[src], video[src], a[href], [data-url], [data-src], [data-video]")
+                    .forEach { element ->
+                        addCandidate(element.attr("src"), refererUrl)
+                        addCandidate(element.attr("data-src"), refererUrl)
+                        addCandidate(element.attr("data-url"), refererUrl)
+                        addCandidate(element.attr("data-video"), refererUrl)
+                        addCandidate(element.attr("href"), refererUrl)
+                    }
+            }
+        }
+
+        fun collectFromDocument(doc: Document, html: String, refererUrl: String) {
+            doc.select(
+                ".streaming_load[data], " +
+                    ".resolusi-list li[data], " +
+                    ".server-list li[data], " +
+                    "[data], [data-url], [data-src], [data-video], [data-link], " +
+                    "iframe[src], iframe[data-src], iframe[data-litespeed-src], " +
+                    "source[src], video[src], a[href]"
+            ).forEach { element ->
+                decodeAndCollect(element.attr("data"), refererUrl)
+                addCandidate(element.attr("data-url"), refererUrl)
+                addCandidate(element.attr("data-src"), refererUrl)
+                addCandidate(element.attr("data-video"), refererUrl)
+                addCandidate(element.attr("data-link"), refererUrl)
+                addCandidate(element.attr("data-litespeed-src"), refererUrl)
+                addCandidate(element.attr("src"), refererUrl)
+                addCandidate(element.attr("href"), refererUrl)
+            }
+
+            collectCandidatesFromText(html, refererUrl).forEach { addCandidate(it, refererUrl) }
+
+            // DramaID sering menyimpan server sebagai JSON base64 pada .resolusi-list/.server-list.
+            doc.select(".resolusi-list li[data], .server-list li[data]").forEach { element ->
+                val decodedJson = decodeBase64(element.attr("data")) ?: return@forEach
+                val resolution = tryParseJson<ResolutionData>(decodedJson)
+                val servers = resolution?.links.orEmpty().ifEmpty {
+                    listOfNotNull(tryParseJson<ServerData>(decodedJson))
+                }
+                val qualityLabel = resolution?.resolution ?: element.text().trim()
+
+                resolution?.subtitle_url
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { normalizeUrl(it, refererUrl) }
+                    ?.let { subtitleCallback(newSubtitleFile("Indonesian", it)) }
+
+                servers.forEach { server ->
+                    val serverUrl = normalizeUrl(server.url.orEmpty(), refererUrl) ?: return@forEach
+                    if (isMediaUrl(serverUrl)) {
+                        emitDirectIfMedia(
+                            serverUrl,
+                            qualityLabel.ifBlank { server.urutan_text ?: "Server" },
+                            refererUrl,
+                            qualityLabel,
+                            emitted,
+                            trackedCallback
+                        )
+                    } else {
+                        addCandidate(serverUrl, refererUrl)
+                    }
                 }
             }
         }
 
-        document.select(".resolusi-list li[data], .server-list li[data]").forEach { element ->
-            val decodedJson = decodeBase64(element.attr("data")) ?: return@forEach
-            val resolution = tryParseJson<ResolutionData>(decodedJson)
-            val servers = resolution?.links.orEmpty().ifEmpty {
-                listOfNotNull(tryParseJson<ServerData>(decodedJson))
+        collectFromDocument(document, page, fixedUrl)
+
+        var safety = 0
+        while (queue.isNotEmpty() && safety++ < 80) {
+            val (target, refererUrl) = queue.removeFirst()
+            if (!visited.add(target)) continue
+            if (isBlockedMediaOrAd(target)) continue
+
+            if (isMediaUrl(target) && !isResolverUrl(target)) {
+                if (
+                    emitDirectIfMedia(
+                        target,
+                        target.substringAfterLast("/").substringBefore("?").ifBlank { "Server" },
+                        refererUrl,
+                        target,
+                        emitted,
+                        trackedCallback
+                    )
+                ) {
+                    continue
+                }
             }
-            val qualityLabel = resolution?.resolution ?: element.text().trim()
 
-            resolution?.subtitle_url
-                ?.takeIf { it.isNotBlank() }
-                ?.let { normalizeUrl(it, fixedUrl) }
-                ?.let { subtitleCallback(newSubtitleFile("Indonesian", it)) }
+            decodeBerkasDriveId(target)?.let { resolver ->
+                addCandidate(resolver, refererUrl)
+            }
 
-            servers.forEach { server ->
-                val serverUrl = normalizeUrl(server.url.orEmpty(), fixedUrl) ?: return@forEach
-                handled = true
-                runCatching { loadExtractor(serverUrl, fixedUrl, subtitleCallback, callback) }
-                emitDirectIfMedia(serverUrl, qualityLabel.ifBlank { server.urutan_text ?: "Server" }, fixedUrl, qualityLabel, emitted, callback)
+            val extractorSuccess = runCatching {
+                loadExtractor(target, refererUrl, subtitleCallback, trackedCallback)
+            }.getOrDefault(false)
+
+            if (extractorSuccess && delivered > 0) continue
+
+            if (shouldCrawlResolver(target)) {
+                val nested = runCatching {
+                    app.get(
+                        target,
+                        referer = refererUrl,
+                        headers = mapOf(
+                            "User-Agent" to com.lagradost.cloudstream3.USER_AGENT,
+                            "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                        )
+                    ).text
+                }.getOrNull() ?: continue
+
+                collectFromDocument(Jsoup.parse(nested, target), nested, target)
             }
         }
 
-        document.select(".download a[href], .link_download a[href]").forEach { link ->
-            val downloadUrl = normalizeUrl(link.attr("href"), fixedUrl) ?: return@forEach
-            val label = link.closest(".link_download")?.selectFirst("strong")?.text()?.trim()
-                ?: link.attr("title").ifBlank { link.text() }.trim()
-            handled = true
-            runCatching { loadExtractor(downloadUrl, fixedUrl, subtitleCallback, callback) }
-            emitDirectIfMedia(downloadUrl, label.ifBlank { "Download" }, fixedUrl, label, emitted, callback)
-        }
-
-        return handled || emitted.isNotEmpty()
+        return delivered > 0
     }
 
     private fun Document.toSearchResults(): List<SearchResponse> {
@@ -299,9 +405,9 @@ class DramaIdProvider : MainAPI() {
         qualityLabel: String?,
         emitted: MutableSet<String>,
         callback: (ExtractorLink) -> Unit
-    ) {
-        if (!isMediaUrl(url) || isResolverUrl(url)) return
-        if (!emitted.add(url)) return
+    ): Boolean {
+        if (!isMediaUrl(url) || isResolverUrl(url) || isBlockedMediaOrAd(url)) return false
+        if (url in emitted) return false
 
         callback(
             newExtractorLink(
@@ -315,9 +421,12 @@ class DramaIdProvider : MainAPI() {
                 headers = mapOf(
                     "Referer" to refererUrl,
                     "Range" to "bytes=0-",
+                    "User-Agent" to com.lagradost.cloudstream3.USER_AGENT,
                 )
             }
         )
+
+        return true
     }
 
     private fun isMediaUrl(url: String): Boolean {
@@ -326,6 +435,102 @@ class DramaIdProvider : MainAPI() {
 
     private fun isResolverUrl(url: String): Boolean {
         return url.contains("stordl.halahgan.com", true) || url.contains("dl.berkasdrive.com/streaming", true)
+    }
+
+    private fun collectCandidatesFromText(text: String, baseUrl: String): List<String> {
+        val output = linkedSetOf<String>()
+        val clean = text
+            .replace("\\/", "/")
+            .replace("\\u002F", "/")
+            .replace("\\u0026", "&")
+            .replace("\\u003d", "=")
+            .replace("\\u003D", "=")
+            .replace("\\u003f", "?")
+            .replace("\\u003F", "?")
+            .replace("&amp;", "&")
+
+        Regex("""https?://[^"'\\\s<>]+""", RegexOption.IGNORE_CASE)
+            .findAll(clean)
+            .map { it.value }
+            .filter { isKnownResolverUrl(it) || isMediaUrl(it) }
+            .forEach { output.add(it) }
+
+        Regex("""https?%3A%2F%2F[^"'\\\s<>]+""", RegexOption.IGNORE_CASE)
+            .findAll(clean)
+            .map {
+                runCatching { URLDecoder.decode(it.value, "UTF-8") }.getOrDefault(it.value)
+            }
+            .filter { isKnownResolverUrl(it) || isMediaUrl(it) }
+            .forEach { output.add(it) }
+
+        Regex("""(?:file|src|url|source|video|videoUrl|streamUrl|downloadUrl|data-url|data-src)\s*[:=]\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+            .findAll(clean)
+            .mapNotNull { it.groupValues.getOrNull(1) }
+            .filter { isKnownResolverUrl(it) || isMediaUrl(it) || it.startsWith("/", true) }
+            .forEach { output.add(normalizeUrl(it, baseUrl) ?: it) }
+
+        return output.toList()
+    }
+
+    private fun isKnownResolverUrl(url: String): Boolean {
+        val value = url.lowercase()
+        return value.contains("stordl.halahgan.com") ||
+            value.contains("dl.berkasdrive.com") ||
+            value.contains("berkasdrive.com") ||
+            value.contains("halahgan.com") ||
+            value.contains("streaming") ||
+            value.contains("/embed/") ||
+            value.contains("/player/") ||
+            value.contains("filemoon") ||
+            value.contains("streamwish") ||
+            value.contains("wishfast") ||
+            value.contains("dood") ||
+            value.contains("streamtape") ||
+            value.contains("vidhide") ||
+            value.contains("vidguard") ||
+            value.contains("voe.") ||
+            value.contains("mixdrop") ||
+            value.contains("mp4upload") ||
+            value.contains("lulustream") ||
+            value.contains("lulu") ||
+            value.contains("krakenfiles") ||
+            value.contains("acefile") ||
+            value.contains("drive.google") ||
+            value.contains("ok.ru")
+    }
+
+    private fun shouldCrawlResolver(url: String): Boolean {
+        val value = url.lowercase()
+        return value.contains("stordl.halahgan.com") ||
+            value.contains("dl.berkasdrive.com") ||
+            value.contains("berkasdrive.com") ||
+            value.contains("halahgan.com") ||
+            value.contains("/embed/") ||
+            value.contains("/player/") ||
+            value.contains("streaming")
+    }
+
+    private fun isBlockedMediaOrAd(url: String): Boolean {
+        val value = url.lowercase()
+        return value.isBlank() ||
+            value.contains("doubleclick") ||
+            value.contains("googlesyndication") ||
+            value.contains("adsbygoogle") ||
+            value.contains("googletagmanager") ||
+            value.contains("google-analytics") ||
+            value.contains("histats") ||
+            value.contains("facebook.com") ||
+            value.contains("twitter.com") ||
+            value.contains("whatsapp") ||
+            value.contains("mailto:") ||
+            value.endsWith(".js") ||
+            value.endsWith(".css") ||
+            value.endsWith(".jpg") ||
+            value.endsWith(".jpeg") ||
+            value.endsWith(".png") ||
+            value.endsWith(".webp") ||
+            value.endsWith(".gif") ||
+            value.endsWith(".svg")
     }
 
     private fun detailValue(document: Document, label: String): String? {
