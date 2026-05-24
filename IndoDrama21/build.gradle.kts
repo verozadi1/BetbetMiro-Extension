@@ -1,9 +1,9 @@
-version = 3
+version = 4
 
 cloudstream {
     language = "id"
     authors = listOf("BetbetMiro")
-    description = "IndoDrama21 rebuilt for the active IP source with clean grouped categories, resilient listing parser, episode mapping, Dooplay AJAX support, and hardened playback extraction."
+    description = "IndoDrama21 active IP build with compact website-backed categories, stable episode mapping, and hardened playback extraction."
 
     /**
      * Status int as the following:

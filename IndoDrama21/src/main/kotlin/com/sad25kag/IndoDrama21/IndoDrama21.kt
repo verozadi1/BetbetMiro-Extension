@@ -65,26 +65,12 @@ class IndoDrama21 : MainAPI() {
     )
 
     override val mainPage = mainPageOf(
-        "" to "Drama Baru",
-        "group:dramaindo/ongoing/|ongoing/|series/ongoing/" to "Ongoing",
-        "group:dramaindo/complete/|complete/|series/complete/" to "Complete",
-        "group:tv-show/|dramaindo/tv-show/|series/type/tv-show/" to "TV Show",
-        "group:movie/|dramaindo/movie/|series/type/movie/" to "Movie",
-        "group:ost/|dramaindo/ost/" to "OST",
-        "drama-list/" to "Drama List",
-
-        "group:series/genre/action/|series/genre/adventure/|genre/action/|genre/adventure/" to "Action & Adventure",
-        "group:series/genre/drama/|series/genre/life/|series/genre/family/|genre/drama/|genre/life/" to "Drama & Life",
-        "group:series/genre/romance/|series/genre/friendship/|series/genre/school/|genre/romance/|genre/school/" to "Romance & Youth",
-        "group:series/genre/comedy/|series/genre/variety-show/|genre/comedy/" to "Comedy & Variety",
-        "group:series/genre/historical/|series/genre/fantasy/|series/genre/wuxia/|series/genre/supernatural/|genre/historical/|genre/fantasy/" to "Historical & Fantasy",
-        "group:series/genre/crime/|series/genre/law/|series/genre/mystery/|series/genre/thriller/|series/genre/suspense/|genre/crime/|genre/mystery/|genre/thriller/" to "Crime & Thriller",
-        "group:series/genre/medical/|series/genre/business/|series/genre/military/|genre/medical/|genre/business/" to "Medical & Career",
-
-        "group:country/korea/|series/country/korea/|drama-korea/" to "Korea",
-        "group:country/china/|series/country/china/|drama-china/" to "China",
-        "group:country/japan/|series/country/japan/|drama-japan/" to "Japan",
-        "group:country/thailand/|series/country/thailand/|drama-thailand/" to "Thailand"
+        "" to "Drama Terbaru",
+        "rating" to "Terpopuler",
+        "box-office" to "Box Office",
+        "country/indonesia" to "Indonesia",
+        "country/thailand" to "Thailand",
+        "country/china" to "China"
     )
 
     private val headers = mapOf(
