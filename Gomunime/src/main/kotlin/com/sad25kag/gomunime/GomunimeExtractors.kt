@@ -15,6 +15,9 @@ import org.jsoup.nodes.Document
 import java.net.URI
 import java.net.URLDecoder
 
+private const val MAX_PLAYER_CANDIDATES = 10
+private const val MAX_CRAWL_DEPTH = 4
+
 private data class HlsSource(
     val url: String,
     val referer: String,
@@ -55,7 +58,7 @@ suspend fun loadGomunimeLinks(
         outDirect = directVideos
     )
 
-    // Kalau halaman episode sudah membawa direct source, jangan muter jauh-jauh.
+    // Kalau halaman episode sudah membawa stream langsung, jangan muter jauh-jauh.
     if (emitCollected(hlsLinks, directVideos, callback)) return true
 
     val prioritizedPlayers = playerLinks
@@ -74,11 +77,11 @@ suspend fun loadGomunimeLinks(
             depth = 0
         )
 
-        // Stop cepat setelah stream ditemukan. Ini yang bikin loading tidak muter kelamaan.
+        // Stop cepat setelah stream ditemukan. Ini menghindari request timeout muter kelamaan.
         if (emitCollected(hlsLinks, directVideos, callback)) return true
     }
 
-    // Last resort ringan: pakai extractor host prioritas saja, bukan semua link halaman.
+    // Last resort ringan: lempar host player prioritas ke extractor bawaan.
     var fallbackDelivered = false
     prioritizedPlayers
         .filter { isExtractorFriendlyHost(it) }
@@ -180,22 +183,23 @@ private suspend fun crawlPlayerFast(
 
     if (outHls.isNotEmpty() || outDirect.isNotEmpty()) return
 
-    nextPlayers
+    for (next in nextPlayers
         .filterNot { it in visited }
         .filterNot { isBadUrl(it) }
         .sortedWith(compareBy<String> { playerPriority(it) }.thenBy { it.length })
         .take(4)
-        .forEach { next ->
-            crawlPlayerFast(
-                url = next,
-                referer = currentUrl,
-                visited = visited,
-                outHls = outHls,
-                outDirect = outDirect,
-                depth = depth + 1
-            )
-            if (outHls.isNotEmpty() || outDirect.isNotEmpty()) return
-        }
+    ) {
+        crawlPlayerFast(
+            url = next,
+            referer = currentUrl,
+            visited = visited,
+            outHls = outHls,
+            outDirect = outDirect,
+            depth = depth + 1
+        )
+
+        if (outHls.isNotEmpty() || outDirect.isNotEmpty()) return
+    }
 }
 
 private fun collectFromPageFast(
@@ -209,48 +213,73 @@ private fun collectFromPageFast(
 ) {
     // Selector dipersempit. Versi lama scan semua a[href], itu yang bikin loading seperti nunggu warung buka.
     document.select(
-        "iframe[src], iframe[data-src], iframe[data-litespeed-src], " +
-            "embed[src], source[src], video[src], video source[src], " +
-            "[data-url], [data-src], [data-link], [data-video], [data-file]"
+        "iframe[src], " +
+            "iframe[data-src], " +
+            "iframe[data-litespeed-src], " +
+            "embed[src], " +
+            "video[src], " +
+            "video source[src], " +
+            "source[src], " +
+            "[data-frame], " +
+            "[data-src], " +
+            "[data-embed], " +
+            "[data-url], " +
+            "[data-video], " +
+            "select.mirror option[value], " +
+            "option[value], " +
+            "a[href*='gdriveplayer'], " +
+            "a[href*='anime-indo'], " +
+            "a[href*='yup.php'], " +
+            "a[href*='kotakajaib'], " +
+            "a[href*='turbosplayer'], " +
+            "a[href*='desustream'], " +
+            "a[href*='yourupload'], " +
+            "a[href*='mp4upload'], " +
+            "a[href*='blogger'], " +
+            "a[href*='blogspot'], " +
+            "a[href*='googlevideo'], " +
+            "a[href*='.m3u8'], " +
+            "a[href*='.mp4']"
     ).forEach { element ->
-        val candidates = listOf(
-            element.attr("src"),
-            element.attr("data-src"),
+        val rawValues = listOf(
             element.attr("data-litespeed-src"),
+            element.attr("data-src"),
+            element.attr("data-frame"),
+            element.attr("data-embed"),
             element.attr("data-url"),
-            element.attr("data-link"),
             element.attr("data-video"),
-            element.attr("data-file")
+            element.attr("src"),
+            element.attr("href"),
+            element.attr("value")
         )
 
-        candidates.forEach { raw ->
-            addCandidate(raw, baseUrl, referer, outPlayers, outHls, outDirect)
+        rawValues.forEach { raw ->
+            decodeMirrorValue(raw, baseUrl)?.let { decoded ->
+                addCandidate(decoded, baseUrl, referer, outPlayers, outHls, outDirect)
+            }
         }
     }
 
-    document.select(
-        "a[href*='kotakajaib'], a[href*='turbosplayer'], a[href*='gdriveplayer'], " +
-            "a[href*='desustream'], a[href*='anime-indo'], a[href*='yourupload'], " +
-            "a[href*='mp4upload'], a[href*='drive.google'], a[href*='blogger'], " +
-            "a[href*='blogspot'], a[href*='play.php'], a[href*='/embed/'], " +
-            "a[href*='/player/'], a[href*='/file/']"
-    ).forEach { anchor ->
-        addCandidate(anchor.attr("href"), baseUrl, referer, outPlayers, outHls, outDirect)
+    collectFromTextFast(
+        text = html,
+        baseUrl = baseUrl,
+        referer = referer,
+        outPlayers = outPlayers,
+        outHls = outHls,
+        outDirect = outDirect
+    )
+
+    document.select("script").forEach { script ->
+        val text = script.data().ifBlank { script.html() }
+        collectFromTextFast(
+            text = text,
+            baseUrl = baseUrl,
+            referer = referer,
+            outPlayers = outPlayers,
+            outHls = outHls,
+            outDirect = outDirect
+        )
     }
-
-    document.select("select.mirror option[value], option[value], [data-frame]").forEach { option ->
-        val raw = option.attr("value")
-            .ifBlank { option.attr("data-frame") }
-            .trim()
-
-        if (raw.isBlank()) return@forEach
-
-        decodeMirrorValue(raw, baseUrl)?.let { decoded ->
-            addCandidate(decoded, baseUrl, referer, outPlayers, outHls, outDirect)
-        }
-    }
-
-    collectFromTextFast(html, baseUrl, referer, outPlayers, outHls, outDirect)
 }
 
 private fun collectFromTextFast(
@@ -263,6 +292,10 @@ private fun collectFromTextFast(
 ) {
     extractHlsUrls(text, baseUrl).forEach { hls ->
         outHls[hls] = HlsSource(hls, referer, qualityFromUrl(hls))
+    }
+
+    extractGoogleVideoPlaybackUrls(text).forEach { video ->
+        outDirect[video] = DirectSource(video, referer, qualityFromUrl(video))
     }
 
     extractFileVariables(text).forEach { raw ->
@@ -352,10 +385,10 @@ private suspend fun emitCollected(
 }
 
 private fun decodeMirrorValue(
-    raw: String,
+    raw: String?,
     baseUrl: String
 ): String? {
-    val clean = raw.cleanEscapedUrl()
+    val clean = raw?.cleanEscapedUrl()?.takeIf { it.isNotBlank() } ?: return null
 
     if (clean.startsWith("http", true) || clean.startsWith("//")) return clean
 
@@ -402,13 +435,7 @@ private fun extractHlsUrls(
         .map { it.value.cleanEscapedUrl() }
         .forEach { urls.add(it) }
 
-    Regex("""https?%3A%2F%2F[^"'\\\s<>]+?(?:\.m3u8|play\.php)[^"'\\\s<>]*""", RegexOption.IGNORE_CASE)
-        .findAll(text)
-        .map { runCatching { URLDecoder.decode(it.value, "UTF-8") }.getOrDefault(it.value) }
-        .map { it.cleanEscapedUrl() }
-        .forEach { urls.add(it) }
-
-    Regex("""["']([^"']+\.m3u8[^"']*)["']""", RegexOption.IGNORE_CASE)
+    Regex("""["']([^"']*\.m3u8[^"']*)["']""", RegexOption.IGNORE_CASE)
         .findAll(text)
         .mapNotNull { it.groupValues.getOrNull(1) }
         .map { normalizeUrl(it, baseUrl) }
@@ -423,17 +450,51 @@ private fun extractHlsUrls(
     return urls.filterNot { isBadUrl(it) }.toList()
 }
 
+private fun extractGoogleVideoPlaybackUrls(text: String): List<String> {
+    val urls = linkedSetOf<String>()
+    val clean = text.cleanEscapedUrl()
+        .replace("\\u003D", "=")
+        .replace("\\u0026", "&")
+        .replace("\\x26", "&")
+        .replace("&amp;", "&")
+
+    Regex(
+        """https?://[^"'\\\s<>]+googlevideo\.com/videoplayback[^"'\\\s<>]*""",
+        RegexOption.IGNORE_CASE
+    ).findAll(clean)
+        .map { it.value.cleanEscapedUrl().trimEnd(',', ';', ')') }
+        .filter { it.isValidGoogleVideoPlayback() }
+        .forEach { urls.add(it) }
+
+    Regex(
+        """https?%3A%2F%2F[^"'\\\s<>]+googlevideo\.com%2Fvideoplayback[^"'\\\s<>]*""",
+        RegexOption.IGNORE_CASE
+    ).findAll(clean)
+        .map { runCatching { URLDecoder.decode(it.value, "UTF-8") }.getOrDefault(it.value) }
+        .map { it.cleanEscapedUrl().trimEnd(',', ';', ')') }
+        .filter { it.isValidGoogleVideoPlayback() }
+        .forEach { urls.add(it) }
+
+    return urls.toList()
+}
+
 private fun extractPriorityUrls(text: String): List<String> {
     val urls = linkedSetOf<String>()
 
     Regex(
-        """https?://[^"'\\\s<>]+?(?:kotakajaib|turbosplayer|gdriveplayer|desustream|anime-indo|yourupload|mp4upload|drive\.google|blogger|blogspot|play\.php|/embed/|/player/|/file/)[^"'\\\s<>]*""",
+        """https?://[^"'\\\s<>]+?(?:kotakajaib|turbosplayer|gdriveplayer|desustream|anime-indo|yourupload|mp4upload|drive\.google|googlevideo\.com/videoplayback|blogger|blogspot|play\.php|/embed/|/player/|/file/)[^"'\\\s<>]*""",
         RegexOption.IGNORE_CASE
     ).findAll(text)
         .map { it.value.cleanEscapedUrl() }
         .forEach { urls.add(it) }
 
-    Regex("""['"]((?:https?:)?//[^'"]+)['"]""")
+    Regex("""https?:\\?/\\?/[^"'\\\s<>]+""", RegexOption.IGNORE_CASE)
+        .findAll(text)
+        .map { it.value.cleanEscapedUrl() }
+        .filter { isLikelyPlayerUrl(it) || it.isHlsLike() || it.isDirectVideo() }
+        .forEach { urls.add(it) }
+
+    Regex("""['"]((?:https?:)?//[^'"]+)['"]""", RegexOption.IGNORE_CASE)
         .findAll(text)
         .mapNotNull { it.groupValues.getOrNull(1) }
         .map { it.cleanEscapedUrl() }
@@ -464,7 +525,7 @@ private fun extractFileVariables(text: String): List<String> {
 private fun extractBase64DecodedTexts(text: String): List<String> {
     val decoded = linkedSetOf<String>()
 
-    Regex("""atob\(["']([^"']{12,})["']\)""")
+    Regex("""atob\(["']([^"']{12,})["']\)""", RegexOption.IGNORE_CASE)
         .findAll(text)
         .mapNotNull { decodeBase64Flexible(it.groupValues[1]) }
         .filter { it.contains("http", true) || it.contains(".m3u8", true) || it.contains("play.php", true) || it.contains("src=", true) }
@@ -502,8 +563,20 @@ private fun String.isHlsLike(): Boolean {
 private fun String.isDirectVideo(): Boolean {
     val lower = lowercase()
     return lower.contains(".mp4") ||
-        lower.contains("googlevideo.com/videoplayback") ||
+        lower.isValidGoogleVideoPlayback() ||
         lower.contains("lh3.googleusercontent.com")
+}
+
+private fun String.isValidGoogleVideoPlayback(): Boolean {
+    val lower = lowercase()
+    if (!lower.contains("googlevideo.com")) return false
+    if (!lower.contains("/videoplayback")) return false
+
+    // Host-only googlevideo seperti https://rr2---sn-...googlevideo.com tidak playable.
+    return lower.contains("expire=") ||
+        lower.contains("itag=") ||
+        lower.contains("mime=") ||
+        lower.contains("ratebypass=")
 }
 
 private fun isLikelyPlayerUrl(url: String): Boolean {
@@ -514,6 +587,7 @@ private fun isLikelyPlayerUrl(url: String): Boolean {
         lower.contains("anime-indo.lol") ||
         lower.contains("yup.php") ||
         lower.contains("yourupload") ||
+        lower.isValidGoogleVideoPlayback() ||
         lower.contains("blogger") ||
         lower.contains("blogspot") ||
         lower.contains("mp4upload") ||
@@ -552,6 +626,7 @@ private fun playerPriority(url: String): Int {
         lower.contains("desustream") -> 4
         lower.contains("blogger") || lower.contains("blogspot") -> 5
         lower.contains("yourupload") || lower.contains("mp4upload") -> 6
+        lower.contains("googlevideo.com/videoplayback") -> 7
         else -> 9
     }
 }
@@ -561,6 +636,7 @@ private fun isBadUrl(url: String): Boolean {
 
     return lower.isBlank() ||
         lower == "#" ||
+        (lower.contains("googlevideo.com") && !lower.contains("/videoplayback")) ||
         lower.startsWith("javascript:") ||
         lower.startsWith("data:") ||
         lower.startsWith("mailto:") ||
@@ -633,26 +709,44 @@ private fun defaultHeaders(
     return headers
 }
 
-private fun String.cleanEscapedUrl(): String {
-    return this
-        .replace("\\/", "/")
-        .replace("\\u0026", "&")
-        .replace("\\u003d", "=")
-        .replace("\\u003f", "?")
-        .replace("\\u002F", "/")
-        .replace("&amp;", "&")
-        .trim()
+private fun qualityFromUrl(url: String): Int {
+    val lower = url.lowercase()
+
+    Regex("""(?:quality|res|q)[=_-]?(\d{3,4})""", RegexOption.IGNORE_CASE)
+        .find(lower)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.toIntOrNull()
+        ?.let { return qualityFromHeight(it) }
+
+    Regex("""(?:itag=)(\d+)""", RegexOption.IGNORE_CASE)
+        .find(lower)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.let { itag ->
+            return when (itag) {
+                "37", "96", "137", "299" -> Qualities.P1080.value
+                "22", "59", "136", "298" -> Qualities.P720.value
+                "18", "134" -> Qualities.P360.value
+                else -> Qualities.Unknown.value
+            }
+        }
+
+    return when {
+        lower.contains("1080") -> Qualities.P1080.value
+        lower.contains("720") -> Qualities.P720.value
+        lower.contains("480") -> Qualities.P480.value
+        lower.contains("360") -> Qualities.P360.value
+        else -> Qualities.Unknown.value
+    }
 }
 
-private fun qualityFromUrl(url: String): Int {
+private fun qualityFromHeight(height: Int): Int {
     return when {
-        url.contains("1080", true) -> Qualities.P1080.value
-        url.contains("720", true) -> Qualities.P720.value
-        url.contains("480", true) -> Qualities.P480.value
-        url.contains("360", true) -> Qualities.P360.value
-        Regex("""itag=(37|96|137)""").containsMatchIn(url) -> Qualities.P1080.value
-        Regex("""itag=(22|59)""").containsMatchIn(url) -> Qualities.P720.value
-        Regex("""itag=18""").containsMatchIn(url) -> Qualities.P360.value
+        height >= 1080 -> Qualities.P1080.value
+        height >= 720 -> Qualities.P720.value
+        height >= 480 -> Qualities.P480.value
+        height >= 360 -> Qualities.P360.value
         else -> Qualities.Unknown.value
     }
 }
@@ -663,10 +757,20 @@ private fun qualityName(quality: Int): String {
         Qualities.P720.value -> "720p"
         Qualities.P480.value -> "480p"
         Qualities.P360.value -> "360p"
-        else -> "HLS"
+        else -> "Auto"
     }
 }
 
-private const val HOME_URL = "https://gomunime.top/"
-private const val MAX_CRAWL_DEPTH = 3
-private const val MAX_PLAYER_CANDIDATES = 10
+private fun String.cleanEscapedUrl(): String {
+    return trim()
+        .replace("\\/", "/")
+        .replace("\\u002F", "/")
+        .replace("\\u003A", ":")
+        .replace("\\u003D", "=")
+        .replace("\\u0026", "&")
+        .replace("\\x2F", "/")
+        .replace("\\x3A", ":")
+        .replace("\\x3D", "=")
+        .replace("\\x26", "&")
+        .replace("&amp;", "&")
+}

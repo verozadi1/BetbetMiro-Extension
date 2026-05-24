@@ -21,11 +21,12 @@ import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.net.URI
 import java.net.URLEncoder
 
+const val HOME_URL = "https://gomunime.top"
+
 class Gomunime : MainAPI() {
-    override var mainUrl = "https://gomunime.top"
+    override var mainUrl = HOME_URL
     override var name = "Gomunime"
     override val hasMainPage = true
     override val hasQuickSearch = true
@@ -48,6 +49,7 @@ class Gomunime : MainAPI() {
         "type/special?page=%d" to "Special",
         "koleksi/anime-skor-mal-tertinggi?page=%d" to "Top Rated",
 
+        // Diambil dari struktur genre aktif Gomunime saat ini.
         "genre/fantasy?page=%d" to "Fantasy",
         "genre/action?page=%d" to "Action",
         "genre/comedy?page=%d" to "Comedy",
@@ -58,66 +60,97 @@ class Gomunime : MainAPI() {
         "genre/seinen?page=%d" to "Seinen",
         "genre/isekai?page=%d" to "Isekai",
         "genre/drama?page=%d" to "Drama",
+        "genre/adult-cast?page=%d" to "Adult Cast",
+        "genre/supernatural?page=%d" to "Supernatural",
+        "genre/reincarnation?page=%d" to "Reincarnation",
+        "genre/sci-fi?page=%d" to "Sci-Fi",
+        "genre/suspense?page=%d" to "Suspense",
+        "genre/historical?page=%d" to "Historical",
+        "genre/military?page=%d" to "Military",
+        "genre/shoujo?page=%d" to "Shoujo",
+        "genre/slice-of-life?page=%d" to "Slice of Life",
+        "genre/mystery?page=%d" to "Mystery",
         "genre/ecchi?page=%d" to "Ecchi",
         "genre/horror?page=%d" to "Horror",
-        "genre/mystery?page=%d" to "Mystery",
         "genre/music?page=%d" to "Music",
-        "genre/slice-of-life?page=%d" to "Slice of Life",
-        "genre/sports?page=%d" to "Sports",
-        "genre/supernatural?page=%d" to "Supernatural"
+        "genre/sports?page=%d" to "Sports"
     )
 
-    override suspend fun getMainPage(
-        page: Int,
-        request: MainPageRequest
-    ): HomePageResponse {
-        val url = buildPageUrl(request.data, page)
-        val document = app.get(url).document
+    private val headers = mapOf(
+        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language" to "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7"
+    )
 
-        val home = parseAnimeCards(document)
+    override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        val url = buildPageUrl(request.data, page)
+
+        val document = app.get(
+            url,
+            headers = headers,
+            referer = mainUrl,
+            timeout = 20L
+        ).document
+
+        val items = document.parseCards()
             .distinctBy { it.url }
 
         return newHomePageResponse(
             request.name,
-            home,
-            hasNext = document.selectFirst(
-                "a:contains(Next), " +
-                    "a:contains(Next »), " +
-                    "a[href*='page=${page + 1}'], " +
-                    ".pagination a[href*='page=${page + 1}']"
-            ) != null
+            items,
+            hasNext = document.hasNextPage(page) || items.isNotEmpty()
         )
     }
 
     private fun buildPageUrl(data: String, page: Int): String {
-        val safePage = page.coerceAtLeast(1)
-
-        if (data == "__home__") {
-            return if (safePage <= 1) mainUrl else "$mainUrl?page=$safePage"
-        }
-
-        val formatted = data.format(safePage)
+        val safePage = if (page <= 0) 1 else page
 
         return when {
-            formatted.startsWith("http", true) -> formatted
-            formatted.startsWith("/") -> "$mainUrl$formatted"
-            else -> "$mainUrl/$formatted"
+            data == "__home__" && safePage <= 1 -> mainUrl
+            data == "__home__" -> "$mainUrl?page=$safePage"
+            data.contains("%d") -> "$mainUrl/${data.format(safePage)}"
+            data.startsWith("http", true) -> data
+            safePage <= 1 -> "$mainUrl/${data.trimStart('/')}"
+            data.contains("?") -> {
+                val path = data.substringBefore("?").trim('/')
+                val query = data.substringAfter("?")
+                "$mainUrl/$path?page=$safePage&$query"
+            }
+            else -> "$mainUrl/${data.trim('/')}/page/$safePage"
         }
     }
 
-    private fun parseAnimeCards(document: Document): List<SearchResponse> {
+    private fun Document.hasNextPage(page: Int): Boolean {
+        return selectFirst(
+            "a[rel=next], " +
+                "a.next, " +
+                ".pagination a:contains(Next), " +
+                "a[href*='page=${page + 1}'], " +
+                "a[href*='/page/${page + 1}']"
+        ) != null
+    }
+
+    private fun Document.parseCards(): List<SearchResponse> {
         val results = linkedMapOf<String, SearchResponse>()
 
-        document.select(
-            "a[href], " +
-                "article a[href], " +
-                ".grid a[href], " +
-                ".card a[href], " +
-                ".anime-card a[href], " +
-                ".relative a[href]"
+        select(
+            "article:has(a[href]), " +
+                ".grid a[href]:has(img), " +
+                ".card:has(a[href]), " +
+                ".anime-card:has(a[href]), " +
+                ".swiper-slide:has(a[href]), " +
+                "a[href]:has(img)"
         ).forEach { element ->
             element.toSearchResult()?.let { item ->
                 results[item.url] = item
+            }
+        }
+
+        if (results.isEmpty()) {
+            select("main a[href], .container a[href]").forEach { element ->
+                element.toSearchResult()?.let { item ->
+                    results[item.url] = item
+                }
             }
         }
 
@@ -128,145 +161,144 @@ class Gomunime : MainAPI() {
         val anchor = if (this.`is`("a[href]")) {
             this
         } else {
-            selectFirst("a[href]") ?: return null
+            selectFirst("a[href]:has(img), h2 a[href], h3 a[href], a[href]") ?: return null
         }
 
         val href = fixUrlNull(anchor.attr("href")) ?: return null
-        if (!isLikelyAnimeUrl(href)) return null
+        if (!href.startsWith(mainUrl)) return null
+        if (isNavigationUrl(href)) return null
+
+        val image = selectFirst("img") ?: anchor.selectFirst("img")
 
         val rawTitle = listOf(
-            anchor.selectFirst("h2")?.text()?.trim(),
-            anchor.selectFirst("h3")?.text()?.trim(),
-            anchor.selectFirst(".title")?.text()?.trim(),
-            anchor.selectFirst(".font-bold")?.text()?.trim(),
-            anchor.attr("title").trim(),
-            anchor.selectFirst("img[alt]")?.attr("alt")?.trim(),
-            anchor.text().trim()
-        ).firstOrNull {
-            !it.isNullOrBlank() &&
-                !it.equals("Home", true) &&
-                !it.equals("Ongoing", true) &&
-                !it.equals("Tamat", true) &&
-                !it.equals("Movies", true) &&
-                !it.equals("Top Rated", true) &&
-                !it.equals("Download App", true) &&
-                !it.equals("Genre", true) &&
-                !it.equals("Lihat Semua →", true) &&
-                !it.equals("Next", true) &&
-                !it.equals("Next »", true) &&
-                !it.equals("« Previous", true)
-        } ?: return null
-
-        val title = rawTitle.extractAnimeTitle().cleanTitle()
-            .takeIf { it.isNotBlank() }
+            selectFirst("h1")?.text(),
+            selectFirst("h2")?.text(),
+            selectFirst("h3")?.text(),
+            selectFirst(".title")?.text(),
+            selectFirst(".entry-title")?.text(),
+            anchor.attr("title"),
+            image?.attr("alt"),
+            anchor.text()
+        ).firstOrNull { !it.isNullOrBlank() }
             ?: return null
 
-        if (title.length < 2) return null
-        if (title.equals("Anime", true)) return null
-        if (title.equals("Tonton", true)) return null
+        val title = rawTitle.cleanTitle()
+        if (title.length < 2 || title.isUiNoise()) return null
 
-        val poster = fixUrlNull(anchor.selectFirst("img")?.getImageAttr())
+        val poster = fixUrlNull(image?.imageAttr())
 
         return newAnimeSearchResponse(
             title,
             href,
-            getTypeFromUrlOrTitle(href, title)
+            guessTypeFromUrlOrTitle(href, title)
         ) {
-            this.posterUrl = poster
+            posterUrl = poster
         }
     }
 
-    private fun isLikelyAnimeUrl(url: String): Boolean {
-        val path = runCatching {
-            URI(url).path.trim('/')
-        }.getOrNull().orEmpty()
+    private fun isNavigationUrl(url: String): Boolean {
+        val path = url.substringAfter(mainUrl, "").substringBefore("?").trim('/').lowercase()
 
-        if (path.isBlank()) return false
+        if (path.isBlank()) return true
 
-        val blockedPrefixes = listOf(
-            "status/",
-            "type/",
-            "genre/",
-            "genres/",
-            "koleksi/",
+        val blockedExact = setOf(
             "download",
-            "about",
-            "faq",
-            "privacy",
-            "dmca",
-            "schedule",
-            "bookmark",
-            "search",
-            "page/",
-            "tag/",
-            "studio/",
-            "year/"
+            "manifest.json",
+            "favicon.ico",
+            "firebase-messaging-sw.js",
+            "sw.js"
         )
 
-        if (blockedPrefixes.any { path.startsWith(it, true) }) return false
-        if (path.equals("anime", true)) return false
-        if (path.equals("home", true)) return false
-        if (path.contains("episode-", true)) return false
+        if (path in blockedExact) return true
 
-        return url.startsWith(mainUrl)
+        val blockedPrefixes = listOf(
+            "genre/",
+            "genres/",
+            "status/",
+            "type/",
+            "koleksi/",
+            "tag/",
+            "tags",
+            "search",
+            "page/",
+            "api/",
+            "storage/",
+            "images/",
+            "icons/",
+            "build/",
+            "login",
+            "register",
+            "privacy",
+            "dmca",
+            "contact"
+        )
+
+        return blockedPrefixes.any { path == it.trimEnd('/') || path.startsWith(it) }
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val q = URLEncoder.encode(query.trim(), "UTF-8")
+        val keyword = query.trim()
+        if (keyword.isBlank()) return emptyList()
 
-        val endpoints = listOf(
-            "$mainUrl/search?q=$q",
-            "$mainUrl/?s=$q",
-            "$mainUrl/search/$q"
+        val encoded = URLEncoder.encode(keyword, "UTF-8")
+        val attempts = listOf(
+            "$mainUrl/search?q=$encoded",
+            "$mainUrl/?s=$encoded",
+            "$mainUrl/search/$encoded"
         )
 
-        val results = linkedMapOf<String, SearchResponse>()
-
-        for (url in endpoints) {
+        for (url in attempts) {
             val document = runCatching {
-                app.get(url).document
+                app.get(
+                    url,
+                    headers = headers,
+                    referer = mainUrl,
+                    timeout = 20L
+                ).document
             }.getOrNull() ?: continue
 
-            parseAnimeCards(document).forEach { item ->
-                results[item.url] = item
-            }
+            val results = document.parseCards()
+                .distinctBy { it.url }
 
-            if (results.isNotEmpty()) break
+            if (results.isNotEmpty()) return results
         }
 
-        return results.values.toList()
+        return emptyList()
     }
 
-    override suspend fun load(url: String): LoadResponse? {
-        val document = app.get(url).document
+    override suspend fun quickSearch(query: String): List<SearchResponse>? {
+        return search(query)
+    }
 
-        val title = document.selectFirst(
-            "h1, " +
-                "h1.entry-title, " +
-                ".entry-title, " +
-                "meta[property=og:title]"
-        )?.let { element ->
-            when {
-                element.hasAttr("content") -> element.attr("content")
-                else -> element.text()
+    override suspend fun load(url: String): LoadResponse {
+        val document = app.get(
+            url,
+            headers = headers,
+            referer = mainUrl,
+            timeout = 20L
+        ).document
+
+        val title = document.selectFirst("h1, h1.entry-title, .entry-title, meta[property=og:title]")
+            ?.let { element ->
+                if (element.hasAttr("content")) element.attr("content") else element.text()
             }
-        }?.cleanTitle()
+            ?.cleanTitle()
+            ?.replace(Regex("""\s+\|\s*Gomunime.*$""", RegexOption.IGNORE_CASE), "")
             ?.takeIf { it.isNotBlank() }
-            ?: return null
+            ?: url.substringAfterLast("/")
+                .replace("-", " ")
+                .cleanTitle()
 
         val poster = fixUrlNull(
             document.selectFirst(
-                "img[alt='$title'], " +
-                    "div.thumb img, " +
-                    ".thumb img, " +
+                "meta[property=og:image], " +
+                    "meta[name=twitter:image], " +
                     ".poster img, " +
+                    ".thumb img, " +
                     "img.wp-post-image, " +
-                    "meta[property=og:image]"
+                    "main img"
             )?.let { element ->
-                when {
-                    element.hasAttr("content") -> element.attr("content")
-                    else -> element.getImageAttr()
-                }
+                if (element.hasAttr("content")) element.attr("content") else element.imageAttr()
             }
         )
 
@@ -286,22 +318,21 @@ class Gomunime : MainAPI() {
                 ".genres a, " +
                 ".genre a"
         ).map { it.text().trim() }
-            .filter { it.isNotBlank() }
+            .filter { it.isNotBlank() && !it.isUiNoise() }
             .distinct()
 
         val plot = document.selectFirst(
-            ".entry-content p, " +
+            "meta[property=og:description], " +
+                "meta[name=description], " +
+                ".entry-content p, " +
                 ".entry-content, " +
                 ".desc, " +
                 ".sinopsis, " +
-                "meta[property=og:description]"
+                "main p"
         )?.let { element ->
-            when {
-                element.hasAttr("content") -> element.attr("content")
-                else -> element.text()
-            }
+            if (element.hasAttr("content")) element.attr("content") else element.text()
         }?.trim()
-            ?.takeIf { it.isNotBlank() }
+            ?.takeIf { it.isNotBlank() && it.length > 20 }
 
         val episodes = document.getEpisodes(url)
         val type = getType(smallInfoText, url, title, episodes)
@@ -345,9 +376,9 @@ class Gomunime : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         return loadGomunimeLinks(
-            data,
-            subtitleCallback,
-            callback
+            data = data,
+            subtitleCallback = subtitleCallback,
+            callback = callback
         )
     }
 
@@ -356,6 +387,7 @@ class Gomunime : MainAPI() {
 
         select(
             "section:contains(Pilih Episode) a[href], " +
+                "div:contains(Pilih Episode) a[href], " +
                 "a[href*='episode-'], " +
                 "a:contains(Episode), " +
                 "a:contains(Nonton Episode), " +
@@ -363,21 +395,22 @@ class Gomunime : MainAPI() {
                 "ul.episodios li a[href], " +
                 ".episodelist a[href], " +
                 ".episode-list a[href]"
-        ).forEachIndexed { index, a ->
-            val href = fixUrlNull(a.attr("href")) ?: return@forEachIndexed
+        ).forEachIndexed { index, anchor ->
+            val href = fixUrlNull(anchor.attr("href")) ?: return@forEachIndexed
+            if (!href.startsWith(mainUrl)) return@forEachIndexed
 
-            val epNum = extractEpisodeNumber(a.text(), href) ?: index + 1
+            val text = anchor.text().trim()
+            val epNum = extractEpisodeNumber(text, href) ?: index + 1
+            val looksEpisode = href.contains("episode-", true) ||
+                text.contains("episode", true) ||
+                text.contains("nonton episode", true) ||
+                text.matches(Regex("""\d+"""))
 
-            val isValidEpisode = href.contains("episode-", true) ||
-                a.text().contains("episode", true) ||
-                a.text().contains("nonton episode", true) ||
-                a.text().trim().matches(Regex("""\d+"""))
-
-            if (!isValidEpisode) return@forEachIndexed
+            if (!looksEpisode) return@forEachIndexed
 
             episodes[href] = newEpisode(href) {
-                this.episode = epNum
-                this.name = "Episode $epNum"
+                episode = epNum
+                name = "Episode $epNum"
             }
         }
 
@@ -386,11 +419,27 @@ class Gomunime : MainAPI() {
             .ifEmpty {
                 listOf(
                     newEpisode(url) {
-                        this.episode = 1
-                        this.name = "Episode 1"
+                        episode = 1
+                        name = "Episode 1"
                     }
                 )
             }
+    }
+
+    private fun extractEpisodeNumber(text: String, url: String): Int? {
+        val source = "$text $url"
+
+        return Regex("""(?i)episode[-\s]*(\d+)""")
+            .find(source)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.toIntOrNull()
+            ?: Regex("""(?i)[?&]ep=(\d+)""")
+                .find(source)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.toIntOrNull()
+            ?: text.trim().toIntOrNull()
     }
 
     private fun getType(
@@ -405,25 +454,33 @@ class Gomunime : MainAPI() {
 
         return when {
             value.contains("ova", true) -> TvType.OVA
+            value.contains("ona", true) -> TvType.OVA
             value.contains("special", true) -> TvType.OVA
             isRealMoviePage(url, title, smallInfo.orEmpty()) -> TvType.AnimeMovie
             else -> TvType.Anime
         }
     }
 
-    private fun getTypeFromUrlOrTitle(
-        url: String,
-        title: String
-    ): TvType {
+    private fun guessTypeFromUrlOrTitle(url: String, title: String): TvType {
         val value = "$url $title"
 
         return when {
             value.contains("ova", true) -> TvType.OVA
+            value.contains("ona", true) -> TvType.OVA
             value.contains("special", true) -> TvType.OVA
             value.contains("/type/movie", true) -> TvType.AnimeMovie
-            title.contains(" movie ", true) -> TvType.AnimeMovie
-            title.endsWith(" movie", true) -> TvType.AnimeMovie
+            value.contains(" movie", true) -> TvType.AnimeMovie
             else -> TvType.Anime
+        }
+    }
+
+    private fun getStatus(text: String?): ShowStatus? {
+        val value = text.orEmpty()
+
+        return when {
+            value.contains("ongoing", true) -> ShowStatus.Ongoing
+            value.contains("completed", true) || value.contains("tamat", true) -> ShowStatus.Completed
+            else -> null
         }
     }
 
@@ -432,103 +489,53 @@ class Gomunime : MainAPI() {
         title: String,
         smallInfo: String
     ): Boolean {
-        val path = runCatching {
-            URI(url).path.trim('/')
-        }.getOrNull().orEmpty()
+        val value = "$url $title $smallInfo"
 
-        val value = "$smallInfo $title"
-
-        return path.contains("movie", true) ||
+        return value.contains("/type/movie", true) ||
+            value.contains(" Movie ", true) ||
             value.contains("Full Movie", true) ||
-            Regex("""(^|\s)Movie(\s|$)""", RegexOption.IGNORE_CASE).containsMatchIn(smallInfo)
+            title.endsWith("Movie", true)
     }
 
-    private fun getStatus(text: String?): ShowStatus {
-        val value = text.orEmpty()
-
-        return when {
-            value.contains("ongoing", true) -> ShowStatus.Ongoing
-            else -> ShowStatus.Completed
-        }
-    }
-
-    private fun Element.getImageAttr(): String? {
-        return when {
-            hasAttr("data-src") -> attr("abs:data-src")
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
-            hasAttr("src") -> attr("abs:src")
-            else -> null
-        }
-    }
-
-    private fun extractEpisodeNumber(
-        text: String,
-        href: String
-    ): Int? {
-        return Regex("""(?:episode|eps?|ep|nonton episode)\s*(\d+)""", RegexOption.IGNORE_CASE)
-            .find(text)
-            ?.groupValues
-            ?.getOrNull(1)
-            ?.toIntOrNull()
-            ?: Regex("""episode-(\d+)""", RegexOption.IGNORE_CASE)
-                .find(href)
-                ?.groupValues
-                ?.getOrNull(1)
-                ?.toIntOrNull()
-            ?: Regex("""\b(\d+)\b""")
-                .find(text)
-                ?.groupValues
-                ?.getOrNull(1)
-                ?.toIntOrNull()
-    }
-
-    private fun String.extractAnimeTitle(): String {
-        var text = this
-            .replace(Regex("""\s+"""), " ")
+    private fun Element.imageAttr(): String? {
+        return attr("data-src")
+            .ifBlank { attr("data-lazy-src") }
+            .ifBlank { attr("data-original") }
+            .ifBlank { attr("src") }
             .trim()
-
-        if (text.contains("Tonton ", true)) {
-            text = text.substringAfter("Tonton ", text)
-        }
-
-        val markers = listOf(
-            " TV •",
-            " Movie •",
-            " OVA •",
-            " ONA •",
-            " Special •",
-            " TV ",
-            " Movie ",
-            " OVA ",
-            " ONA ",
-            " Special "
-        )
-
-        for (marker in markers) {
-            if (text.contains(marker, true)) {
-                text = text.substringBefore(marker)
-                break
-            }
-        }
-
-        text = text.replace(Regex("""^★\s*[\d.]+\s*"""), "")
-        text = text.replace(Regex("""^(Ongoing|Completed)\s+""", RegexOption.IGNORE_CASE), "")
-
-        return text.trim()
+            .takeIf { it.isNotBlank() }
     }
 
     private fun String.cleanTitle(): String {
-        return this
-            .replace(Regex("""(?i)^nonton\s+"""), "")
-            .replace(Regex("""(?i)\s+subtitle\s+indonesia.*$"""), "")
-            .replace(Regex("""(?i)\s+sub\s+indo.*$"""), "")
+        return replace(Regex("""(?i)\bNonton\b"""), "")
+            .replace(Regex("""(?i)\bSub(?:title)?\s*Indo(?:nesia)?\b"""), "")
+            .replace(Regex("""(?i)\bHD\b"""), "")
+            .replace(Regex("""(?i)\bdi\s+Gomunime\b"""), "")
             .replace(Regex("""\s+"""), " ")
-            .trim()
+            .trim(' ', '-', '—', '|')
     }
 
-    data class ServerOption(
-        val name: String,
-        val url: String
-    )
+    private fun String.isUiNoise(): Boolean {
+        val clean = trim().lowercase()
+
+        return clean.isBlank() ||
+            clean in setOf(
+                "home",
+                "ongoing",
+                "tamat",
+                "movies",
+                "movie",
+                "genre",
+                "genre populer",
+                "top rated",
+                "download app",
+                "play",
+                "info",
+                "lihat semua",
+                "semua",
+                "pilih episode",
+                "gdrive",
+                "yup"
+            )
+    }
 }
