@@ -1,9 +1,9 @@
-version = 24
+version = 25
 
 cloudstream {
     language = "id"
     authors = listOf("BetbetMiro")
-    description = "Idlix provider for ryangoslingfrance.com with expanded categories, country/year filters, Dooplay AJAX playback, prioritized host extraction, faster loading, subtitle parsing, and hardened fallback."
+    description = "Idlix provider using the current API catalogue and play-session flow, with refreshed homepage rows, genre/country/year/network categories, metadata, subtitles, and HLS playback."
 
     /**
      * Status int as the following:
@@ -22,5 +22,5 @@ cloudstream {
     )
 
     isCrossPlatform = false
-    iconUrl = "https://www.google.com/s2/favicons?domain=ryangoslingfrance.com&sz=%size%"
+    iconUrl = "https://www.google.com/s2/favicons?domain=z1.idlixku.com&sz=%size%"
 }
