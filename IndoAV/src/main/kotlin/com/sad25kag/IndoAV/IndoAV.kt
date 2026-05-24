@@ -1547,7 +1547,7 @@ class IndoAV : MainAPI() {
                 raw.startsWith("javascript", true) ||
                 shouldSkipUrl(raw) ||
                 label.contains("report") ||
-                label.contains("upload")
+                (label.contains("upload") && !isLikelyPlayable(raw))
             ) {
                 return@forEach
             }
@@ -2118,24 +2118,52 @@ class IndoAV : MainAPI() {
     }
 
     private fun shouldSkipUrl(url: String): Boolean {
-        val value = url.lowercase()
+        val value = url.lowercase().trim()
+        if (value.isBlank()) return true
 
-        return value.contains("facebook.com") ||
-            value.contains("twitter.com") ||
-            value.contains("reddit.com") ||
-            value.contains("telegram") ||
-            value.contains("whatsapp") ||
-            value.contains("mailto:") ||
-            value.contains("report") ||
-            value.contains("upload") ||
-            value.contains("partners") ||
-            value.contains("copyright") ||
-            value.contains("transparency") ||
-            value.contains("2257") ||
-            value.contains("theporndude") ||
-            value.contains("googletagmanager") ||
-            value.contains("recaptcha") ||
-            value.contains("cloudflareinsights")
+        val isPlayableCandidate =
+            value.contains(".m3u8") ||
+                value.contains(".mp4") ||
+                value.contains(".webm") ||
+                value.contains(".txt") ||
+                value.contains("/video/v/") ||
+                value.contains("/video/load/") ||
+                value.contains("/video/img/") ||
+                value.contains("/video/embed/") ||
+                value.contains("/video/source") ||
+                value.contains("/video/stream") ||
+                value.contains("/site/player") ||
+                value.contains("/api/video/") ||
+                value.contains("/api/embed/") ||
+                isKnownHost(value)
+
+        val alwaysBlocked =
+            value.contains("facebook.com") ||
+                value.contains("twitter.com") ||
+                value.contains("reddit.com") ||
+                value.contains("telegram") ||
+                value.contains("whatsapp") ||
+                value.contains("mailto:") ||
+                value.contains("report") ||
+                value.contains("partners") ||
+                value.contains("copyright") ||
+                value.contains("transparency") ||
+                value.contains("2257") ||
+                value.contains("theporndude") ||
+                value.contains("googletagmanager") ||
+                value.contains("recaptcha") ||
+                value.contains("cloudflareinsights")
+
+        if (alwaysBlocked) return true
+
+        // Do not block playable CDN paths just because they contain "upload"/"uploads".
+        // IndoAV can expose real media through upload-like storage paths, so only skip
+        // upload navigation pages when the candidate is not a stream/embed/media URL.
+        return !isPlayableCandidate && (
+            value.contains("/upload") ||
+                value.contains("upload video") ||
+                value.contains("upload-videos")
+            )
     }
 
     private fun normalizeUrl(
