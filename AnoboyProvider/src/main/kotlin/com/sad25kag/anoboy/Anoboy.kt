@@ -838,16 +838,36 @@ class Anoboy : MainAPI() {
                 lower.endsWith(".svg")
         }
 
+        fun mediaPath(url: String): String {
+            return runCatching {
+                URI(url).path.orEmpty().lowercase()
+            }.getOrDefault(url.substringBefore("?").lowercase())
+        }
+
+        fun isM3u8Media(url: String): Boolean {
+            val path = mediaPath(url)
+            return path.endsWith(".m3u8") || url.lowercase().contains(".m3u8?")
+        }
+
+        fun isVideoFileMedia(url: String): Boolean {
+            val path = mediaPath(url)
+            return path.endsWith(".mp4") ||
+                path.endsWith(".webm") ||
+                path.endsWith(".mkv") ||
+                path.endsWith(".mov") ||
+                path.endsWith(".ts")
+        }
+
         fun isDirectMedia(url: String): Boolean {
             val lower = url.lowercase()
-            return lower.contains(".m3u8") ||
-                lower.contains(".mp4") ||
-                lower.contains(".webm") ||
-                lower.contains(".mkv") ||
+
+            // Jangan emit halaman wrapper/API sebagai VIDEO hanya karena query-nya
+            // mengandung teks .mp4/.m3u8. Itu yang memicu
+            // ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED (3003) di ExoPlayer.
+            return isM3u8Media(url) ||
+                isVideoFileMedia(url) ||
                 lower.contains("googlevideo.com/videoplayback") ||
-                lower.contains("blogger.googleusercontent.com") ||
-                lower.contains("video-downloads.googleusercontent.com") ||
-                lower.contains("redirector.googlevideo.com")
+                lower.contains("redirector.googlevideo.com/videoplayback")
         }
 
         fun shouldQueue(url: String): Boolean {
@@ -866,6 +886,8 @@ class Anoboy : MainAPI() {
                 (lower.contains("anoboy.") && lower.contains("/api/")) ||
                 lower.contains("blogger.com/video.g") ||
                 lower.contains("blogger.com/_/bloggervideoplayerui") ||
+                lower.contains("blogger.googleusercontent.com") ||
+                lower.contains("video-downloads.googleusercontent.com") ||
                 lower.contains("youtube.googleapis.com/embed") ||
                 lower.contains("youtube.com/embed") ||
                 lower.contains("viiwbpyl.com/h/") ||
@@ -1020,7 +1042,7 @@ class Anoboy : MainAPI() {
                     source = name,
                     name = name,
                     url = link,
-                    type = if (link.contains(".m3u8", true)) {
+                    type = if (isM3u8Media(link)) {
                         ExtractorLinkType.M3U8
                     } else {
                         ExtractorLinkType.VIDEO
@@ -1039,10 +1061,7 @@ class Anoboy : MainAPI() {
                     this.headers = mapOf(
                         "User-Agent" to USER_AGENT,
                         "Referer" to referer,
-                        "Origin" to runCatching {
-                            val uri = URI(referer)
-                            "${uri.scheme}://${uri.host}"
-                        }.getOrDefault(mainUrl)
+                        "Accept" to "*/*"
                     )
                 }
             )
