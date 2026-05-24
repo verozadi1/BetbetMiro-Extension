@@ -71,34 +71,21 @@ class IndoAV : MainAPI() {
 
     override val mainPage = mainPageOf(
         "" to "Trending",
-        "trending" to "Trending",
         "?filter=terbaru" to "Terbaru",
         "?filter=banyak-dilihat" to "Banyak Dilihat",
-        "?filter=banyak-disukai" to "Disukai",
+        "?filter=banyak-disukai" to "Paling Disukai",
         "?filter=banyak-dikomentari" to "Banyak Dikomentari",
         "?filter=durasi-panjang" to "Durasi Panjang",
-        "?filter=random" to "Random",
 
-        "kategori/bokep-indonesia" to "Bokep Indonesia",
-        "kategori/bokep-indo" to "Bokep Indo",
-        "kategori/bokep-sin" to "Bokep SIN",
-        "kategori/bokep-dosa" to "Bokep Dosa",
-        "kategori/bokep-barat" to "Bokep Barat",
-        "kategori/bokep-asia" to "Bokep Asia",
-        "kategori/bokep-jepang" to "Bokep Jepang",
+        "group:kategori/bokep-indonesia|kategori/bokep-indo|genre/bokep-abg|genre/bokep-jilbab|genre/bokep-ukhti|genre/bokep-mahasiswi|genre/bokep-tiktok|genre/bokep-binor" to "Indonesia & Lokal",
+        "group:kategori/bokep-asia|kategori/bokep-jepang|genre/bokep-malaysia" to "Asia",
+        "kategori/bokep-barat" to "Barat",
         "kategori/tanpa-sensor" to "Tanpa Sensor",
 
-        "genre/bokep-abg" to "ABG",
-        "genre/bokep-jilbab" to "Jilbab",
-        "genre/bokep-ukhti" to "Ukhti",
-        "genre/bokep-malaysia" to "Malaysia",
-        "genre/bokep-lesbian" to "Lesbian",
-        "genre/bokepsin" to "BOKEPSIN",
-        "genre/bokep-binor" to "Binor",
         "genre/bokep-skandal" to "Skandal",
-        "genre/bokep-mahasiswi" to "Mahasiswi",
-        "genre/bokep-tiktok" to "Tiktok",
-        "genre/bokep-sugar-daddy" to "Sugar Daddy"
+        "genre/bokep-lesbian" to "Lesbian",
+        "genre/bokep-sugar-daddy" to "Sugar Daddy",
+        "?filter=random" to "Random"
     )
 
     private val headers = mapOf(
@@ -111,7 +98,48 @@ class IndoAV : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
-        val url = buildPageUrl(request.data, page)
+        if (request.data.startsWith("group:")) {
+            val groupedItems = request.data.removePrefix("group:")
+                .split("|")
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .flatMap { path -> fetchMainPageItems(path, page).take(8) }
+                .filterNot { isBadTitle(it.name) }
+                .distinctBy { it.url }
+
+            return newHomePageResponse(
+                request.name,
+                groupedItems,
+                hasNext = groupedItems.isNotEmpty()
+            )
+        }
+
+        val result = fetchMainPageItemsWithNext(request.data, page)
+
+        return newHomePageResponse(
+            request.name,
+            result.items,
+            hasNext = result.hasNext
+        )
+    }
+
+    private data class MainPageItemsResult(
+        val items: List<SearchResponse>,
+        val hasNext: Boolean
+    )
+
+    private suspend fun fetchMainPageItems(
+        path: String,
+        page: Int
+    ): List<SearchResponse> {
+        return fetchMainPageItemsWithNext(path, page).items
+    }
+
+    private suspend fun fetchMainPageItemsWithNext(
+        path: String,
+        page: Int
+    ): MainPageItemsResult {
+        val url = buildPageUrl(path, page)
 
         val document = app.get(
             url,
@@ -124,7 +152,7 @@ class IndoAV : MainAPI() {
             .distinctBy { it.url }
 
         val dynamicItems = if (staticItems.isEmpty() || hasFeedSkeleton(document)) {
-            parseDynamicFeed(document, request.data, page)
+            parseDynamicFeed(document, path, page)
         } else {
             emptyList()
         }
@@ -133,9 +161,8 @@ class IndoAV : MainAPI() {
             .filterNot { isBadTitle(it.name) }
             .distinctBy { it.url }
 
-        return newHomePageResponse(
-            request.name,
-            items,
+        return MainPageItemsResult(
+            items = items,
             hasNext = hasNextPage(document, page) || dynamicItems.isNotEmpty()
         )
     }
