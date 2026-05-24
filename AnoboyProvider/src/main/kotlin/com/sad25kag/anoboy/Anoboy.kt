@@ -1,5 +1,6 @@
 package com.sad25kag.anoboy
 
+import android.util.Base64
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addAniListId
@@ -860,7 +861,9 @@ class Anoboy : MainAPI() {
                 lower.contains("yupbatch") ||
                 lower.contains("yup/data.php") ||
                 lower.contains("adsbatch720.php") ||
+                lower.contains("stream.php") ||
                 lower.contains("embed.php") ||
+                (lower.contains("anoboy.") && lower.contains("/api/")) ||
                 lower.contains("blogger.com/video.g") ||
                 lower.contains("blogger.com/_/bloggervideoplayerui") ||
                 lower.contains("youtube.googleapis.com/embed") ||
@@ -876,6 +879,9 @@ class Anoboy : MainAPI() {
                 lower.contains("voe.sx") ||
                 lower.contains("mixdrop") ||
                 lower.contains("mp4upload") ||
+                lower.contains("short.icu") ||
+                lower.contains("abyss.to") ||
+                lower.contains("abysscdn") ||
                 lower.contains("ok.ru") ||
                 lower.contains("youtube.com/embed") ||
                 lower.contains("drive.google.com")
@@ -928,7 +934,21 @@ class Anoboy : MainAPI() {
             }
 
             Regex(
-                """(?:file|src|url|source|video|data-video|data-src|data-url)\s*[:=]\s*["']([^"']+)["']""",
+                """(?:file|src|url|source|video|data-video|data-src|data-url|hls|hlsUrl|hls_url|stream|streamUrl|stream_url)\s*[:=]\s*["']([^"']+)["']""",
+                RegexOption.IGNORE_CASE
+            ).findAll(cleaned).forEach { match ->
+                queueUrl(match.groupValues[1], base)
+            }
+
+            Regex(
+                """["']((?:/uploads/|/embed/|/player/|/api/)[^"']+)["']""",
+                RegexOption.IGNORE_CASE
+            ).findAll(cleaned).forEach { match ->
+                queueUrl(match.groupValues[1], base)
+            }
+
+            Regex(
+                """(?:location\.href|window\.location|location\.replace)\s*=?\s*\(?\s*["']([^"']+)["']""",
                 RegexOption.IGNORE_CASE
             ).findAll(cleaned).forEach { match ->
                 queueUrl(match.groupValues[1], base)
@@ -960,7 +980,7 @@ class Anoboy : MainAPI() {
             }
 
             doc.select(
-                "a[href], [data-video], [data-src], [data-url], [data-iframe], [data-embed], option[value]"
+                "a[href], button, [data-video], [data-src], [data-url], [data-iframe], [data-embed], [data-file], [data-link], option[value]"
             ).forEach { element ->
                 queueUrl(element.attr("href"), baseUrl)
                 queueUrl(element.attr("data-video"), baseUrl)
@@ -968,13 +988,15 @@ class Anoboy : MainAPI() {
                 queueUrl(element.attr("data-url"), baseUrl)
                 queueUrl(element.attr("data-iframe"), baseUrl)
                 queueUrl(element.attr("data-embed"), baseUrl)
+                queueUrl(element.attr("data-file"), baseUrl)
+                queueUrl(element.attr("data-link"), baseUrl)
 
                 val optionValue = element.attr("value")
                 if (optionValue.isNotBlank()) {
                     queueUrl(optionValue, baseUrl)
 
                     runCatching {
-                        val decodedHtml = base64Decode(optionValue.replace("\\s".toRegex(), ""))
+                        val decodedHtml = decodeBase64String(optionValue.replace("\\s".toRegex(), ""))
                         val decodedDoc = Jsoup.parse(decodedHtml)
                         decodedDoc.select("iframe[src], iframe[data-src], source[src], video[src], a[href]")
                             .forEach { decodedElement ->
@@ -1108,6 +1130,26 @@ class Anoboy : MainAPI() {
             }
 
         return emitted
+    }
+
+
+    private fun decodeBase64String(value: String): String {
+        val clean = value.trim()
+        val candidates = listOf(
+            clean,
+            clean.replace('-', '+').replace('_', '/'),
+            clean + "=".repeat((4 - clean.length % 4) % 4),
+            clean.replace('-', '+').replace('_', '/') + "=".repeat((4 - clean.length % 4) % 4)
+        ).distinct()
+
+        for (candidate in candidates) {
+            val decoded = runCatching {
+                String(Base64.decode(candidate, Base64.DEFAULT), Charsets.UTF_8)
+            }.getOrNull()
+            if (!decoded.isNullOrBlank()) return decoded
+        }
+
+        return ""
     }
 
 
