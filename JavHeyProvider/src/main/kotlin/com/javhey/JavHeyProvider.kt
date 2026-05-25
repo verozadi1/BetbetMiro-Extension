@@ -10,6 +10,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import org.jsoup.nodes.Element
 import java.net.URI
+import java.net.URLEncoder
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -34,37 +35,108 @@ class JavHeyProvider : MainAPI() {
     )
 
     override val mainPage = mainPageOf(
-        "$mainUrl/videos/paling-baru/page=" to "Latest Update",
-        "$mainUrl/category/2/censored/page=" to "Category Censored",
-        "$mainUrl/category/31/decensored/page=" to "Category Uncensored",
-        "$mainUrl/videos/paling-dilihat/page=" to "Most Viewed",
-        "$mainUrl/videos/top-rating/page=" to "Top Rating"
+        "$mainUrl/videos/paling-baru/page=" to "Paling Baru",
+        "$mainUrl/videos/jav-sub-indo/page=" to "JAV Sub Indo",
+        "$mainUrl/videos/paling-dilihat/page=" to "Paling Dilihat",
+        "$mainUrl/videos/top-rating/page=" to "Top Rating",
+
+        "$mainUrl/category/2/censored/page=" to "Censored",
+        "$mainUrl/category/31/decensored/page=" to "Uncensored",
+        "$mainUrl/category/118/amateur/page=" to "Amateur",
+        "$mainUrl/category/19/beautiful-girl/page=" to "Beautiful Girl",
+        "$mainUrl/category/1/big-tits/page=" to "Big Tits",
+        "$mainUrl/category/11/mature-woman/page=" to "Mature Woman",
+        "$mainUrl/category/232/ntr/page=" to "NTR",
+        "$mainUrl/category/3/creampie/page=" to "Creampie",
+        "$mainUrl/category/127/cosplay/page=" to "Cosplay",
+        "$mainUrl/category/91/uniform/page=" to "Uniform",
+        "$mainUrl/category/42/schoolgirl/page=" to "Schoolgirl",
+        "$mainUrl/category/83/massage-refre/page=" to "Massage",
+        "$mainUrl/category/9/housewife/page=" to "Housewife"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = if (page == 1) request.data.removeSuffix("/page=") else "${request.data}$page"
+        val safePage = page.coerceAtLeast(1)
+        val url = if (safePage == 1) request.data.removeSuffix("/page=") else "${request.data}$safePage"
         val document = app.get(url, headers = headers).document
-        
-        val home = document.select("div.article_standard_view > article.item").mapNotNull { it.toSearchResult() }
-        return newHomePageResponse(request.name, home)
+
+        val home = parseVideoCards(document)
+            .distinctBy { it.url }
+
+        return newHomePageResponse(
+            request.name,
+            home,
+            hasNext = hasNextPage(document, safePage)
+        )
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val url = "$mainUrl/search?s=$query"
+        val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
+        if (encodedQuery.isBlank()) return emptyList()
+
+        val url = "$mainUrl/search?s=$encodedQuery"
         val searchHeaders = headers + mapOf("Referer" to "$mainUrl/")
         val document = app.get(url, headers = searchHeaders).document
-        
-        return document.select("div.article_standard_view > article.item").mapNotNull { it.toSearchResult() }
+
+        return parseVideoCards(document)
+            .distinctBy { it.url }
+    }
+
+    private fun parseVideoCards(document: org.jsoup.nodes.Document): List<SearchResponse> {
+        return document.select(
+            "div.article_standard_view > article.item, " +
+                "article.item:has(div.item_content h3 a), " +
+                "article:has(a[href*='/jav-']):has(img), " +
+                "article:has(a[href*='/video/']):has(img)"
+        ).mapNotNull { it.toSearchResult() }
+    }
+
+    private fun hasNextPage(document: org.jsoup.nodes.Document, page: Int): Boolean {
+        return document.selectFirst(
+            "a.next, " +
+                ".pagination a:contains(Next), " +
+                ".page-numbers.next, " +
+                "a[href*='page=${page + 1}'], " +
+                "a[href*='page%3D${page + 1}']"
+        ) != null
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val titleElement = selectFirst("div.item_content > h3 > a") ?: return null
-        val title = titleElement.text().removePrefix("JAV Subtitle Indonesia - ").trim()
+        val titleElement = selectFirst(
+            "div.item_content > h3 > a, " +
+                "h3 > a[href], " +
+                "h2 > a[href], " +
+                "a[href*='/jav-'], " +
+                "a[href*='/video/']"
+        ) ?: return null
+
         val href = fixUrl(titleElement.attr("href"))
-        val posterUrl = selectFirst("div.item_header > a > img")?.attr("src")
-        
-        return newMovieSearchResponse(title, href, TvType.NSFW) { 
-            this.posterUrl = posterUrl 
+        if (!href.startsWith(mainUrl)) return null
+
+        val title = titleElement.text()
+            .ifBlank { titleElement.attr("title") }
+            .ifBlank { selectFirst("img")?.attr("alt").orEmpty() }
+            .removePrefix("JAV Subtitle Indonesia - ")
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+
+        if (title.length < 2) return null
+
+        val posterUrl = selectFirst(
+            "div.item_header > a > img, " +
+                "img[data-src], " +
+                "img[data-lazy-src], " +
+                "img[src]"
+        )?.let { image ->
+            image.attr("abs:data-src")
+                .ifBlank { image.attr("abs:data-lazy-src") }
+                .ifBlank { image.attr("abs:src") }
+                .ifBlank { image.attr("data-src") }
+                .ifBlank { image.attr("src") }
+        }
+
+        return newMovieSearchResponse(title, href, TvType.NSFW) {
+            this.posterUrl = posterUrl
         }
     }
 
@@ -130,7 +202,7 @@ class JavHeyProvider : MainAPI() {
                     when {
                         streamwishDomains.any { url.contains(it) } -> {
                             val fixedUrl = url.replace("minochinos.com", "streamwish.to")
-                                              .replace("terbit2.com", "streamwish.to")
+                                .replace("terbit2.com", "streamwish.to")
                             loadExtractor(fixedUrl, data, subtitleCallback, callback)
                         }
                         byseDomains.any { url.contains(it) } -> {
@@ -145,7 +217,7 @@ class JavHeyProvider : MainAPI() {
                 }
             }
         }
-        return@coroutineScope true
+        return@coroutineScope rawLinks.isNotEmpty()
     }
 }
 
