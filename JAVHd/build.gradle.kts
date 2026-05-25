@@ -1,18 +1,18 @@
-version = 6
+version = 7
 
 cloudstream {
-    authors     = listOf("BetbetMiro")
-    language    = "id"
-    description = "The Best Free JAV online, Free Download and Watching jav porn videos. Tons of hot jav censored,Japanese tube,Japanese sex online. Update everyday, javhd.today are waiting for you. Enjoy!"
+    authors = listOf("BetbetMiro")
+    language = "id"
+    description = "Provider JAVHD dengan kategori situs yang dirapikan, pencarian, subtitle eksternal, dan extractor playback aktif."
 
     /**
-     * Status int as the following:
+     * Status int:
      * 0: Down
      * 1: Ok
      * 2: Slow
      * 3: Beta only
-    **/
-    status  = 1 // will be 3 if unspecified
+     */
+    status = 1
     tvTypes = listOf("NSFW")
     iconUrl = "https://javhd.today/logo/javhd1.png"
 }
